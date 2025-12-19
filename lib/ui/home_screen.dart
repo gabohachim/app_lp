@@ -722,7 +722,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 8),
         OutlinedButton(
           onPressed: _cancelarBusqueda,
-          child: const Text('Cancelar'),
+          child: const Text('Limpiar'),
         ),
 
         // ✅ Si lo tienes en la colección
