@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool autocompletando = false;
 
-  PreparedVinylAdd? prepared; // ✅ lo que devuelve el servicio central
+  PreparedVinylAdd? prepared;
 
   @override
   void initState() {
@@ -204,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    // Limpia barra al buscar (como querías)
+    // Limpia barra al buscar
     artistaCtrl.clear();
     albumCtrl.clear();
     sugerenciasArtistas = [];
@@ -280,7 +280,6 @@ class _HomeScreenState extends State<HomeScreen> {
     // Respaldo automático (si está activo)
     await BackupService.autoSaveIfEnabled();
 
-    // ✅ Importantísimo: refrescar UI/contador/lista
     setState(() {
       prepared = null;
       mostrarAgregar = false;
@@ -434,27 +433,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ✅ CAMBIO AQUÍ: solo número, sin “LP”, y en una esquina
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
       builder: (context, snap) {
         final total = snap.data ?? 0;
         return Align(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.topLeft,
           child: Container(
             width: 90,
             height: 70,
-            alignment: Alignment.center,
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.65),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('LP', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
-                Text('$total', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-              ],
+            child: Align(
+              alignment: Alignment.topLeft, // esquina
+              child: Text(
+                '$total',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ),
         );
