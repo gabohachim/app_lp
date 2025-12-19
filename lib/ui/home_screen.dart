@@ -317,6 +317,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _numeroBadge(dynamic numero, {Alignment alignment = Alignment.topLeft}) {
+    return Align(
+      alignment: alignment,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.70),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          '$numero',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _gridVinylCard(Map<String, dynamic> v, {required bool conBorrar}) {
     final year = (v['year'] as String?)?.trim() ?? '';
     final artista = (v['artista'] as String?)?.trim() ?? '';
@@ -341,13 +362,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'LP N° ${v['numero']}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 4),
+
+                  // ✅ ANTES: "LP N° ..."
+                  // ✅ AHORA: solo artista/album/año y el número va como badge
+
                   Text(
                     artista,
                     maxLines: 1,
@@ -364,6 +382,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+
+            // ✅ Badge pequeño con el número en la esquina
+            const Positioned(
+              left: 8,
+              top: 8,
+              child: SizedBox.shrink(),
+            ),
+            Positioned(
+              left: 8,
+              top: 8,
+              child: _numeroBadge(v['numero']),
+            ),
+
             if (conBorrar)
               Positioned(
                 right: 6,
@@ -433,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ CAMBIO AQUÍ: solo número, sin “LP”, y en una esquina
+  // ✅ Contador sin “LP”: solo número en una esquina
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
@@ -450,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Align(
-              alignment: Alignment.topLeft, // esquina
+              alignment: Alignment.topLeft,
               child: Text(
                 '$total',
                 style: const TextStyle(
@@ -629,7 +660,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'LP N° ${v['numero']} — ${v['artista']} — ${v['album']}$yTxt',
+                            // aquí lo dejo como estaba (solo es el bloque de "resultados" en búsqueda)
+                            '${v['numero']} — ${v['artista']} — ${v['album']}$yTxt',
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -665,50 +697,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          if (!autocompletando && p != null && (p.selectedCover500 ?? '').trim().isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      p.selectedCover500!,
-                      width: 70,
-                      height: 70,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(
-                        width: 70,
-                        height: 70,
-                        child: Center(child: Icon(Icons.broken_image)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      p.coverCandidates.length > 1
-                          ? 'Carátula (hay ${p.coverCandidates.length} opciones)'
-                          : 'Carátula automática ✅',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (!autocompletando && p != null && p.coverCandidates.length > 1) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: elegirCaratula,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('Elegir carátula (máx 5)'),
-            ),
-          ],
           const SizedBox(height: 10),
           TextField(
             controller: yearCtrl,
@@ -751,6 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
+        // ✅ LISTA: eliminamos "LP N° ..." y mostramos badge pequeño con numero
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -765,7 +754,28 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
-                title: Text('LP N° ${v['numero']} — ${v['artista']} — ${v['album']}'),
+
+                // ✅ AQUÍ VA EL CAMBIO:
+                // title ya NO muestra "LP N° ..."
+                // el número va pequeño en una esquina
+                title: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 26),
+                      child: Text(
+                        '${v['artista']} — ${v['album']}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: _numeroBadge(v['numero']),
+                    ),
+                  ],
+                ),
+
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
