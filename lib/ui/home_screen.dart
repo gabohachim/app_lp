@@ -12,7 +12,7 @@ import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
 
-enum Vista { inicio, buscar, lista, borrar }
+enum Vista { inicio, buscar, lista, favoritos, borrar }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool mostrarAgregar = false;
 
   bool autocompletando = false;
-
   PreparedVinylAdd? prepared;
 
   @override
@@ -72,6 +71,25 @@ class _HomeScreenState extends State<HomeScreen> {
   void snack(String t) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+  }
+
+  void _openDetail(Map<String, dynamic> v) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.90,
+        child: VinylDetailSheet(vinyl: v),
+      ),
+    ).then((_) {
+      // refresca por si marcaste/desmarcaste favorito
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   // ---- autocomplete artista ----
@@ -173,7 +191,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Buscar en tu colección
     final res = await VinylDb.instance.search(artista: artista, album: album);
 
     setState(() {
@@ -185,7 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     snack(res.isEmpty ? 'No lo tienes' : 'Ya lo tienes');
 
-    // Si no está, preparamos auto-metadata + carátulas + país/genre/bio
     if (mostrarAgregar) {
       setState(() => autocompletando = true);
 
@@ -204,64 +220,12 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    // Limpia barra al buscar
     artistaCtrl.clear();
     albumCtrl.clear();
     sugerenciasArtistas = [];
     sugerenciasAlbums = [];
     artistaElegido = null;
     albumElegido = null;
-  }
-
-  Future<void> elegirCaratula() async {
-    final p = prepared;
-    if (p == null || p.coverCandidates.isEmpty) {
-      snack('No encontré carátulas para elegir.');
-      return;
-    }
-
-    final picked = await showDialog<CoverCandidate>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Elegir carátula (máx 5)'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: p.coverCandidates.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final c = p.coverCandidates[i];
-              final y = (c.year ?? '').trim();
-              return ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    c.coverUrl250,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.album),
-                  ),
-                ),
-                title: Text('Opción ${i + 1}${y.isEmpty ? '' : ' — $y'}'),
-                onTap: () => Navigator.pop(context, c),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
-        ],
-      ),
-    );
-
-    if (picked == null) return;
-
-    setState(() {
-      prepared!.selectedCover = picked;
-      if ((picked.year ?? '').trim().isNotEmpty) yearCtrl.text = picked.year!.trim();
-    });
   }
 
   Future<void> agregar() async {
@@ -274,10 +238,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     snack(res.message);
-
     if (!res.ok) return;
 
-    // Respaldo automático (si está activo)
     await BackupService.autoSaveIfEnabled();
 
     setState(() {
@@ -302,39 +264,36 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Icon(Icons.album);
   }
 
-  void _openDetail(Map<String, dynamic> v) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+  Widget _numeroBadge(dynamic numero) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.70),
+        borderRadius: BorderRadius.circular(6),
       ),
-      builder: (_) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.90,
-        child: VinylDetailSheet(vinyl: v),
+      child: Text(
+        '$numero',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
 
-  Widget _numeroBadge(dynamic numero, {Alignment alignment = Alignment.topLeft}) {
-    return Align(
-      alignment: alignment,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.70),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          '$numero',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
+  Widget _gridCover(Map<String, dynamic> v) {
+    final cp = (v['coverPath'] as String?)?.trim() ?? '';
+    if (cp.isNotEmpty) {
+      final f = File(cp);
+      if (f.existsSync()) {
+        return Image.file(f, fit: BoxFit.cover);
+      }
+    }
+    return Container(
+      color: Colors.black12,
+      alignment: Alignment.center,
+      child: const Icon(Icons.album, size: 48),
     );
   }
 
@@ -362,10 +321,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // ✅ ANTES: "LP N° ..."
-                  // ✅ AHORA: solo artista/album/año y el número va como badge
-
                   Text(
                     artista,
                     maxLines: 1,
@@ -383,17 +338,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // ✅ Badge pequeño con el número en la esquina
-            const Positioned(
-              left: 8,
-              top: 8,
-              child: SizedBox.shrink(),
-            ),
-            Positioned(
-              left: 8,
-              top: 8,
-              child: _numeroBadge(v['numero']),
-            ),
+            // badge número (esquina)
+            Positioned(left: 8, top: 8, child: _numeroBadge(v['numero'])),
 
             if (conBorrar)
               Positioned(
@@ -412,21 +358,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _gridCover(Map<String, dynamic> v) {
-    final cp = (v['coverPath'] as String?)?.trim() ?? '';
-    if (cp.isNotEmpty) {
-      final f = File(cp);
-      if (f.existsSync()) {
-        return Image.file(f, fit: BoxFit.cover);
-      }
-    }
-    return Container(
-      color: Colors.black12,
-      alignment: Alignment.center,
-      child: const Icon(Icons.album, size: 48),
     );
   }
 
@@ -464,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ Contador sin “LP”: solo número en una esquina
+  // contador: solo número en esquina
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
@@ -542,8 +473,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
         }),
         const SizedBox(height: 10),
-        btn(Icons.list, 'Mostrar lista de vinilos', () => setState(() => vista = Vista.lista)),
+
+        // ✅ antes: “Mostrar lista de vinilos”
+        btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
+
+        // ✅ NUEVO: favoritos (entre lista y ajustes)
+        btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
+        const SizedBox(height: 10),
+
         btn(Icons.settings, 'Ajustes', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
@@ -573,31 +511,6 @@ class _HomeScreenState extends State<HomeScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
-        const SizedBox(height: 6),
-        if (buscandoArtistas) const LinearProgressIndicator(),
-        if (sugerenciasArtistas.isNotEmpty)
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: sugerenciasArtistas.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final a = sugerenciasArtistas[i];
-                final c = (a.country ?? '').trim();
-                return ListTile(
-                  dense: true,
-                  title: Text(a.name),
-                  subtitle: Text(c.isEmpty ? '' : 'País: $c'),
-                  onTap: () => _pickArtist(a),
-                );
-              },
-            ),
-          ),
         const SizedBox(height: 10),
         TextField(
           controller: albumCtrl,
@@ -609,95 +522,11 @@ class _HomeScreenState extends State<HomeScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
-        const SizedBox(height: 6),
-        if (buscandoAlbums) const LinearProgressIndicator(),
-        if (sugerenciasAlbums.isNotEmpty)
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: sugerenciasAlbums.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final al = sugerenciasAlbums[i];
-                final y = (al.year ?? '').trim();
-                return ListTile(
-                  dense: true,
-                  title: Text(al.title),
-                  subtitle: Text(y.isEmpty ? '' : 'Año: $y'),
-                  onTap: () => _pickAlbum(al),
-                );
-              },
-            ),
-          ),
         const SizedBox(height: 10),
         ElevatedButton(onPressed: buscar, child: const Text('Buscar')),
         const SizedBox(height: 12),
-        if (resultados.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Resultados en tu colección:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                ...resultados.map((v) {
-                  final y = (v['year'] as String?)?.trim() ?? '';
-                  final yTxt = y.isEmpty ? '' : ' ($y)';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        _leadingCover(v),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            // aquí lo dejo como estaba (solo es el bloque de "resultados" en búsqueda)
-                            '${v['numero']} — ${v['artista']} — ${v['album']}$yTxt',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ],
-            ),
-          ),
+
         if (mostrarAgregar) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Agregar este vinilo:', style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 6),
-                Text('Artista: ${p?.artist ?? ''}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text('Álbum: ${p?.album ?? ''}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                if (autocompletando) const LinearProgressIndicator(),
-                if (!autocompletando && p != null) ...[
-                  Text('Año: ${p.year ?? '—'}'),
-                  Text('Género: ${p.genre ?? '—'}'),
-                  Text('País: ${p.country ?? '—'}'),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
           TextField(
             controller: yearCtrl,
             keyboardType: TextInputType.number,
@@ -715,13 +544,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget listaCompleta({required bool conBorrar}) {
+  Widget listaCompleta({required bool conBorrar, required bool onlyFavorites}) {
+    final fut = onlyFavorites ? VinylDb.instance.getFavorites() : VinylDb.instance.getAll();
+
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: VinylDb.instance.getAll(),
+      future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
         final items = snap.data!;
-        if (items.isEmpty) return const Text('No tienes vinilos todavía.', style: TextStyle(color: Colors.white));
+        if (items.isEmpty) {
+          return Text(
+            onlyFavorites ? 'No tienes favoritos todavía.' : 'No tienes vinilos todavía.',
+            style: const TextStyle(color: Colors.white),
+          );
+        }
 
         if (_gridView) {
           return GridView.builder(
@@ -739,7 +575,6 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        // ✅ LISTA: eliminamos "LP N° ..." y mostramos badge pequeño con numero
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -755,9 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListTile(
                 leading: _leadingCover(v),
 
-                // ✅ AQUÍ VA EL CAMBIO:
-                // title ya NO muestra "LP N° ..."
-                // el número va pequeño en una esquina
+                // badge número + texto artista/album
                 title: Stack(
                   children: [
                     Padding(
@@ -768,11 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      child: _numeroBadge(v['numero']),
-                    ),
+                    Positioned(left: 0, top: 0, child: _numeroBadge(v['numero'])),
                   ],
                 ),
 
@@ -810,6 +639,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case Vista.lista:
         title = 'Lista de vinilos';
         break;
+      case Vista.favoritos:
+        title = 'Vinilos favoritos';
+        break;
       case Vista.borrar:
         title = 'Borrar vinilos';
         break;
@@ -827,7 +659,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget? _buildFab() {
-    if (vista == Vista.lista || vista == Vista.borrar) {
+    if (vista == Vista.lista || vista == Vista.favoritos || vista == Vista.borrar) {
       return FloatingActionButton.extended(
         onPressed: () => setState(() => vista = Vista.inicio),
         icon: const Icon(Icons.home),
@@ -859,8 +691,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       botonesInicio(),
                     ],
                     if (vista == Vista.buscar) vistaBuscar(),
-                    if (vista == Vista.lista) listaCompleta(conBorrar: false),
-                    if (vista == Vista.borrar) listaCompleta(conBorrar: true),
+                    if (vista == Vista.lista) listaCompleta(conBorrar: false, onlyFavorites: false),
+                    if (vista == Vista.favoritos) listaCompleta(conBorrar: false, onlyFavorites: true),
+                    if (vista == Vista.borrar) listaCompleta(conBorrar: true, onlyFavorites: false),
                   ],
                 ),
               ),
