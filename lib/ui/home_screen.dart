@@ -73,8 +73,6 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
-  // ----------------- FAVORITOS (colección) -----------------
-
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
@@ -91,15 +89,11 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  // ----------------- WISHLIST (lista deseos) -----------------
-
   Future<void> _removeWishlistItem(int id) async {
     await VinylDb.instance.removeWishlistById(id);
     if (!mounted) return;
     setState(() {});
   }
-
-  // ----------------- DETALLE -----------------
 
   void _openDetail(Map<String, dynamic> v) {
     showModalBottomSheet(
@@ -118,8 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {});
     });
   }
-
-  // ----------------- UI helpers -----------------
 
   Widget _numeroBadge(dynamic numero) {
     return Container(
@@ -166,8 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ----------------- HOME widgets -----------------
-
   Widget encabezadoInicio() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ Contador centrado dentro del cuadro (tu arreglo pedido)
+  // contador centrado
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
@@ -215,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.black.withOpacity(0.65),
             borderRadius: BorderRadius.circular(14),
           ),
-          alignment: Alignment.center, // ✅ CENTRADO
+          alignment: Alignment.center,
           child: Text(
             '$total',
             style: const TextStyle(
@@ -299,7 +289,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ----------------- BUSCAR (autocompletado + auto metadata) -----------------
+  // ----------------- BUSCAR (la misma versión que ya tienes) -----------------
+  // NOTA: No cambié tu lógica de buscar en este mensaje para no romper nada.
+  // Si necesitas, dime y te lo dejo también con wishlist/fav integrados.
 
   void _onArtistChanged(String v) {
     _debounceArtist?.cancel();
@@ -485,12 +477,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final res = await VinylAddService.addPrepared(
       p,
-      overrideYear: yearCtrl.text.trim().isEmpty ? null : yearCtrl.text.trim(),
+      overrideYear: yearCtrl.text.trim().isNotEmpty ? yearCtrl.text.trim() : null,
       favorite: false,
     );
 
     snack(res.message);
-
     if (!res.ok) return;
 
     await BackupService.autoSaveIfEnabled();
@@ -757,14 +748,26 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // ✅ número arriba derecha
             Positioned(
               right: 8,
               top: 8,
-              child: _numeroBadge(v['numero']),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.70),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${v['numero']}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ),
 
-            // ⭐ a la izquierda (no choca con el número)
             if (!conBorrar)
               Positioned(
                 left: 6,
@@ -842,8 +845,6 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
-
-                // ✅ badge arriba derecha (sin LP)
                 title: Stack(
                   children: [
                     Padding(
@@ -854,19 +855,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: _numeroBadge(v['numero']),
-                    ),
+                    Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
                   ],
                 ),
-
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
                 onTap: () => _openDetail(v),
-
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
@@ -890,8 +885,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ----------------- WISHLIST UI -----------------
-
+  // ✅ Wishlist: carrito GRIS porque ahí siempre está en deseos
   Widget listaDeseos() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: VinylDb.instance.getWishlist(),
@@ -935,7 +929,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: Text('Año: ${year.isEmpty ? '—' : year}'),
                 trailing: IconButton(
                   tooltip: 'Quitar de lista deseos',
-                  icon: const Icon(Icons.shopping_cart),
+                  icon: const Icon(Icons.shopping_cart, color: Colors.grey), // ✅ gris
                   onPressed: () => _removeWishlistItem(w['id'] as int),
                 ),
               ),
@@ -945,8 +939,6 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
-
-  // ----------------- APP BAR/FAB -----------------
 
   PreferredSizeWidget? _buildAppBar() {
     if (vista == Vista.inicio) return null;
@@ -991,8 +983,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return null;
   }
-
-  // ----------------- BUILD -----------------
 
   @override
   Widget build(BuildContext context) {
