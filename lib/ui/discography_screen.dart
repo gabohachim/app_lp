@@ -25,7 +25,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   ArtistHit? pickedArtist;
   List<AlbumItem> albums = [];
 
-  // Estado optimista
+  // estado optimista
   final Map<String, bool> _exists = {};
   final Map<String, bool> _fav = {};
   final Map<String, int?> _vinylId = {};
@@ -324,8 +324,9 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       active: fav,
                                       onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
+                                    // 🛒 SIEMPRE carrito de compra
                                     _miniBtn(
-                                      icon: inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
+                                      icon: Icons.shopping_cart,
                                       active: inWish,
                                       onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
                                     ),
