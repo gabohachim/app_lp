@@ -287,13 +287,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (lo dejamos arriba derecha)
+            // 🗑️ borrar (abajo derecha, bien a la derecha)
             if (conBorrar)
               Positioned(
-                left: 2,
+                right: 2,
                 bottom: 2,
                 child: IconButton(
                   icon: const Icon(Icons.delete),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                  splashRadius: 20,
                   onPressed: () async {
                     await VinylDb.instance.deleteById(v['id'] as int);
                     await BackupService.autoSaveIfEnabled();
@@ -598,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
-        // ✅ NUEVO: Lista de deseos (debajo de favoritos)
+        // ✅ Lista de deseos (debajo de favoritos)
         btn(Icons.bookmark_border, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
