@@ -189,7 +189,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
 
     final id = _vinylId[key];
     if (id == null) {
-      // si no tenemos id aún, hidratamos y luego reintenta
       await _hydrateIfNeeded(artistName, al);
       return;
     }
@@ -205,7 +204,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // revert
       setState(() => _fav[key] = currentFav);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error actualizando favorito.')),
@@ -247,7 +245,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // revert
       setState(() => _wish[key] = inWish);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error actualizando lista deseos.')),
@@ -258,7 +255,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     }
   }
 
-  // Botón pequeño para la fila del año (más compacto)
+  // Botón compacto para la fila del año (más pegado y alineable)
   IconButton _miniBtn({
     required Widget icon,
     required String tooltip,
@@ -270,8 +267,9 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       icon: icon,
       iconSize: 20,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
       splashRadius: 18,
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -294,7 +292,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
               ),
             ),
             if (searchingArtists) const LinearProgressIndicator(),
-
             if (artistResults.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
@@ -307,9 +304,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                   );
                 },
               ),
-
             const SizedBox(height: 10),
-
             Expanded(
               child: loadingAlbums
                   ? const Center(child: CircularProgressIndicator())
@@ -320,7 +315,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         final year = al.year ?? '—';
                         final key = _k(artistName, al.title);
 
-                        // si no está cargado el estado, lo hidratamos (una vez)
                         if (!_exists.containsKey(key) && _busy[key] != true && artistName.isNotEmpty) {
                           _hydrateIfNeeded(artistName, al);
                         }
@@ -329,6 +323,11 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         final fav = _fav[key] == true;
                         final inWish = _wish[key] == true;
                         final busy = _busy[key] == true;
+
+                        // ✅ colores por estado (cambian al tocar, optimista)
+                        final addColor = exists ? Colors.green : null;
+                        final favColor = fav ? Colors.amber : null;
+                        final wishColor = inWish ? Colors.blue : null;
 
                         return Card(
                           child: ListTile(
@@ -344,41 +343,47 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             ),
                             title: Text(al.title),
 
-                            // ✅ ABAJO: Año a la izquierda y botones a la derecha
+                            // ✅ Año a la izquierda, botones PEGADOS A LA DERECHA
                             subtitle: Row(
                               children: [
-                                Expanded(
-                                  child: Text('Año: $year'),
-                                ),
-                                const SizedBox(width: 6),
+                                Expanded(child: Text('Año: $year')),
 
-                                // ➕ Agregar (al lado derecho del año)
-                                _miniBtn(
-                                  icon: Icon(
-                                    Icons.add_circle_outline,
-                                    color: exists ? Colors.black26 : null,
-                                  ),
-                                  tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
-                                  onPressed: (busy || exists)
-                                      ? null
-                                      : () => _addAlbumOptimistic(artistName, al, favorite: false),
-                                ),
+                                // contenedor para que queden al borde derecho sí o sí
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // ➕ Agregar (cuando existe -> check verde)
+                                    _miniBtn(
+                                      icon: Icon(
+                                        exists ? Icons.check_circle : Icons.add_circle_outline,
+                                        color: exists ? addColor : (exists ? Colors.black26 : null),
+                                      ),
+                                      tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
+                                      onPressed: (busy || exists)
+                                          ? null
+                                          : () => _addAlbumOptimistic(artistName, al, favorite: false),
+                                    ),
 
-                                // ⭐ Favoritos
-                                _miniBtn(
-                                  icon: Icon(fav ? Icons.star : Icons.star_border),
-                                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                                  onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
-                                ),
+                                    // ⭐ Favoritos (amarillo cuando está activo)
+                                    _miniBtn(
+                                      icon: Icon(
+                                        fav ? Icons.star : Icons.star_border,
+                                        color: favColor,
+                                      ),
+                                      tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                                      onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
+                                    ),
 
-                                // 🛒 Lista de deseos
-                                _miniBtn(
-                                  icon: Icon(
-                                    inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
-                                    color: inWish ? Colors.grey : null,
-                                  ),
-                                  tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
-                                  onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
+                                    // 🛒 Lista de deseos (azul cuando está activo)
+                                    _miniBtn(
+                                      icon: Icon(
+                                        inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
+                                        color: wishColor,
+                                      ),
+                                      tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
+                                      onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
