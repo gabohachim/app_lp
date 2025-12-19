@@ -196,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // número
+            // número (esquina)
             Positioned(left: 8, top: 8, child: _numeroBadge(v['numero'])),
 
             // ⭐ Favoritos (si NO está en modo borrar)
@@ -266,6 +266,25 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _pickArtist(ArtistHit a) async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      artistaElegido = a;
+      artistaCtrl.text = a.name;
+      sugerenciasArtistas = [];
+
+      // Cuando eliges artista: reinicia álbum
+      albumCtrl.clear();
+      albumElegido = null;
+      sugerenciasAlbums = [];
+      buscandoAlbums = false;
+
+      prepared = null;
+      mostrarAgregar = false;
+      resultados = [];
+    });
+  }
+
   void _onAlbumChanged(String v) {
     _debounceAlbum?.cancel();
     final q = v.trim();
@@ -297,6 +316,18 @@ class _HomeScreenState extends State<HomeScreen> {
         sugerenciasAlbums = hits;
         buscandoAlbums = false;
       });
+    });
+  }
+
+  Future<void> _pickAlbum(AlbumSuggest a) async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      albumElegido = a;
+      albumCtrl.text = a.title;
+      sugerenciasAlbums = [];
+      prepared = null;
+      mostrarAgregar = false;
+      resultados = [];
     });
   }
 
@@ -338,12 +369,13 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    artistaCtrl.clear();
-    albumCtrl.clear();
-    sugerenciasArtistas = [];
-    sugerenciasAlbums = [];
-    artistaElegido = null;
-    albumElegido = null;
+    // dejamos el texto (para que veas lo que buscaste) y solo ocultamos sugerencias
+    setState(() {
+      sugerenciasArtistas = [];
+      sugerenciasAlbums = [];
+      buscandoArtistas = false;
+      buscandoAlbums = false;
+    });
   }
 
   Future<void> agregar() async {
@@ -467,9 +499,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Icon(icon),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(text,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Text(
+                  text,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
               const Icon(Icons.chevron_right),
             ],
@@ -484,8 +517,7 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.search, 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
         btn(Icons.library_music, 'Discografías', () {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const DiscographyScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
         }),
         const SizedBox(height: 10),
 
@@ -497,8 +529,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 10),
 
         btn(Icons.settings, 'Ajustes', () {
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
             if (!mounted) return;
             setState(() {});
@@ -512,45 +543,220 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget vistaBuscar() {
+    final p = prepared;
+
+    Widget suggestionBox<T>({
+      required List<T> items,
+      required Widget Function(T) tile,
+    }) {
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, i) => tile(items[i]),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ✅ SOLO: Artista, Álbum y botón Buscar
         TextField(
           controller: artistaCtrl,
           onChanged: _onArtistChanged,
           decoration: InputDecoration(
-            labelText: 'Artista (autocompletar)',
+            labelText: 'Artista',
             filled: true,
             fillColor: Colors.white.withOpacity(0.85),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
+        if (buscandoArtistas) const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: LinearProgressIndicator(),
+        ),
+        if (sugerenciasArtistas.isNotEmpty)
+          suggestionBox<ArtistHit>(
+            items: sugerenciasArtistas,
+            tile: (a) {
+              final c = (a.country ?? '').trim();
+              return ListTile(
+                dense: true,
+                title: Text(a.name),
+                subtitle: c.isEmpty ? null : Text('País: $c'),
+                onTap: () => _pickArtist(a),
+              );
+            },
+          ),
+
         const SizedBox(height: 10),
+
         TextField(
           controller: albumCtrl,
           onChanged: _onAlbumChanged,
           decoration: InputDecoration(
-            labelText: 'Álbum (autocompletar, 1 letra basta)',
+            labelText: 'Álbum',
             filled: true,
             fillColor: Colors.white.withOpacity(0.85),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
-        const SizedBox(height: 10),
-        ElevatedButton(onPressed: buscar, child: const Text('Buscar')),
-        const SizedBox(height: 12),
-        TextField(
-          controller: yearCtrl,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Año (si quieres cambiarlo)',
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.85),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          ),
+        if (buscandoAlbums) const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: LinearProgressIndicator(),
         ),
+        if (sugerenciasAlbums.isNotEmpty)
+          suggestionBox<AlbumSuggest>(
+            items: sugerenciasAlbums,
+            tile: (al) {
+              final y = (al.year ?? '').trim();
+              return ListTile(
+                dense: true,
+                title: Text(al.title),
+                subtitle: y.isEmpty ? null : Text('Año: $y'),
+                onTap: () => _pickAlbum(al),
+              );
+            },
+          ),
+
         const SizedBox(height: 10),
-        ElevatedButton(onPressed: autocompletando ? null : agregar, child: const Text('Agregar vinilo')),
+        ElevatedButton(
+          onPressed: buscar,
+          child: const Text('Buscar'),
+        ),
+
+        // ✅ Si lo tienes en la colección
+        if (resultados.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ya lo tienes en tu colección:',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                ...resultados.map((v) {
+                  final y = (v['year'] as String?)?.trim() ?? '';
+                  final yTxt = y.isEmpty ? '' : ' ($y)';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        _leadingCover(v),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${v['numero']} — ${v['artista']} — ${v['album']}$yTxt',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ],
+
+        // ✅ Si NO está y se puede agregar, mostramos automático año/género/país/caratula + botón
+        if (mostrarAgregar) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Agregar este vinilo', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                if (autocompletando) const LinearProgressIndicator(),
+
+                if (!autocompletando && p != null) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: (p.selectedCover500 ?? '').trim().isEmpty
+                            ? Container(
+                                width: 90,
+                                height: 90,
+                                color: Colors.black12,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.album, size: 40),
+                              )
+                            : Image.network(
+                                p.selectedCover500!,
+                                width: 90,
+                                height: 90,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 90,
+                                  height: 90,
+                                  color: Colors.black12,
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.broken_image),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Artista: ${p.artist}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text('Álbum: ${p.album}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 6),
+                            Text('Año: ${p.year ?? '—'}'),
+                            Text('Género: ${p.genre ?? '—'}'),
+                            Text('País: ${p.country ?? '—'}'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // año editable (opcional)
+                  TextField(
+                    controller: yearCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Año (opcional: corregir)',
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.85),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: agregar,
+                    child: const Text('Agregar vinilo'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -602,7 +808,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListTile(
                 leading: _leadingCover(v),
 
-                // badge número + artista/album
+                // número como badge + texto artista/album (sin "LP")
                 title: Stack(
                   children: [
                     Padding(
@@ -622,7 +828,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 onTap: () => _openDetail(v),
 
-                // ✅ Trailing: borrar o ⭐
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),

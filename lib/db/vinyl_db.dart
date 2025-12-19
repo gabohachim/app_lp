@@ -52,8 +52,7 @@ class VinylDb {
         if (oldV < 6) {
           await d.execute(
               'ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
-          await d.execute(
-              'CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
+          await d.execute('CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
         }
       },
     );
@@ -61,9 +60,7 @@ class VinylDb {
 
   Future<int> getCount() async {
     final d = await db;
-    final r = Sqflite.firstIntValue(
-      await d.rawQuery('SELECT COUNT(*) FROM vinyls'),
-    );
+    final r = Sqflite.firstIntValue(await d.rawQuery('SELECT COUNT(*) FROM vinyls'));
     return r ?? 0;
   }
 
@@ -74,11 +71,7 @@ class VinylDb {
 
   Future<List<Map<String, dynamic>>> getFavorites() async {
     final d = await db;
-    return d.query(
-      'vinyls',
-      where: 'favorite = 1',
-      orderBy: 'numero ASC',
-    );
+    return d.query('vinyls', where: 'favorite = 1', orderBy: 'numero ASC');
   }
 
   Future<void> setFavorite({required int id, required bool favorite}) async {
@@ -91,7 +84,6 @@ class VinylDb {
     );
   }
 
-  /// ✅ Para Discografía: trae el vinilo si existe, con su id y favorite.
   Future<Map<String, dynamic>?> findByExact({
     required String artista,
     required String album,
@@ -224,7 +216,9 @@ class VinylDb {
             'artistBio': v['artistBio']?.toString().trim(),
             'coverPath': v['coverPath']?.toString().trim(),
             'mbid': v['mbid']?.toString().trim(),
-            'favorite': (v['favorite'] is int) ? v['favorite'] : 0,
+            'favorite': (v['favorite'] is int)
+                ? v['favorite']
+                : ((v['favorite'] == true) ? 1 : 0),
           },
           conflictAlgorithm: ConflictAlgorithm.abort,
         );

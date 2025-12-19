@@ -70,8 +70,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       loadingAlbums = true;
     });
 
-    final info =
-        await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
+    final info = await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
     final list = await DiscographyService.getDiscographyByArtistId(a.id);
 
     if (!mounted) return;
@@ -97,9 +96,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
           child: SingleChildScrollView(child: Text(bio)),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
         ],
       ),
     );
@@ -120,13 +117,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
-    setState(() {}); // refresca estado
+    setState(() {});
   }
 
-  Future<void> _toggleFavoriteExisting({
-    required int id,
-    required bool next,
-  }) async {
+  Future<void> _toggleFavoriteExisting({required int id, required bool next}) async {
     await VinylDb.instance.setFavorite(id: id, favorite: next);
     await BackupService.autoSaveIfEnabled();
     if (!mounted) return;
@@ -199,9 +193,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(artistName,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w900)),
+                          Text(
+                            artistName,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                          ),
                           const SizedBox(height: 4),
                           Text('País: ${country.isEmpty ? '—' : country}'),
                           Text('Género(s): ${genres.isEmpty ? '—' : genres.join(', ')}'),
@@ -244,8 +239,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                 width: 56,
                                 height: 56,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.album),
+                                errorBuilder: (_, __, ___) => const Icon(Icons.album),
                               ),
                             ),
                             title: Text(al.title),
@@ -254,22 +248,14 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => AlbumTracksScreen(
-                                      album: al, artistName: artistName),
+                                  builder: (_) => AlbumTracksScreen(album: al, artistName: artistName),
                                 ),
                               );
                             },
-
-                            // ✅ Star: agrega a favoritos o quita favoritos
                             trailing: FutureBuilder<Map<String, dynamic>?>(
-                              future: VinylDb.instance.findByExact(
-                                artista: artistName,
-                                album: al.title,
-                              ),
+                              future: VinylDb.instance.findByExact(artista: artistName, album: al.title),
                               builder: (context, snap2) {
                                 final row = snap2.data;
-
-                                // No existe en colección
                                 if (row == null) {
                                   return IconButton(
                                     tooltip: 'Agregar a favoritos',
@@ -280,7 +266,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
 
                                 final id = row['id'] as int;
                                 final fav = (row['favorite'] ?? 0) == 1;
-
                                 return IconButton(
                                   tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
                                   icon: Icon(fav ? Icons.star : Icons.star_border),
