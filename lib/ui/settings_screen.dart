@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/backup_service.dart';
+import '../services/view_mode_service.dart';
+bool _grid = false;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
