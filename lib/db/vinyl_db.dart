@@ -18,7 +18,7 @@ class VinylDb {
 
     return openDatabase(
       path,
-      version: 6, // ✅ subimos versión por favoritos
+      version: 6,
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE vinyls(
@@ -40,7 +40,6 @@ class VinylDb {
         await d.execute('CREATE INDEX idx_fav ON vinyls(favorite);');
       },
       onUpgrade: (d, oldV, newV) async {
-        // migraciones sin perder datos
         if (oldV < 3) {
           await d.execute('ALTER TABLE vinyls ADD COLUMN genre TEXT;');
         }
@@ -51,8 +50,10 @@ class VinylDb {
           await d.execute('ALTER TABLE vinyls ADD COLUMN country TEXT;');
         }
         if (oldV < 6) {
-          await d.execute('ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
-          await d.execute('CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
+          await d.execute(
+              'ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
+          await d.execute(
+              'CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
         }
       },
     );
@@ -60,7 +61,9 @@ class VinylDb {
 
   Future<int> getCount() async {
     final d = await db;
-    final r = Sqflite.firstIntValue(await d.rawQuery('SELECT COUNT(*) FROM vinyls'));
+    final r = Sqflite.firstIntValue(
+      await d.rawQuery('SELECT COUNT(*) FROM vinyls'),
+    );
     return r ?? 0;
   }
 
@@ -86,6 +89,23 @@ class VinylDb {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  /// ✅ Para Discografía: trae el vinilo si existe, con su id y favorite.
+  Future<Map<String, dynamic>?> findByExact({
+    required String artista,
+    required String album,
+  }) async {
+    final d = await db;
+    final a = artista.trim().toLowerCase();
+    final al = album.trim().toLowerCase();
+    final rows = await d.query(
+      'vinyls',
+      where: 'LOWER(artista)=? AND LOWER(album)=?',
+      whereArgs: [a, al],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
   }
 
   Future<List<Map<String, dynamic>>> search({
@@ -185,26 +205,6 @@ class VinylDb {
   Future<void> deleteById(int id) async {
     final d = await db;
     await d.delete('vinyls', where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<void> insertFromMap(Map<String, dynamic> v) async {
-    final d = await db;
-    await d.insert(
-      'vinyls',
-      {
-        'numero': v['numero'],
-        'artista': (v['artista'] ?? '').toString().trim(),
-        'album': (v['album'] ?? '').toString().trim(),
-        'year': v['year']?.toString().trim(),
-        'genre': v['genre']?.toString().trim(),
-        'country': v['country']?.toString().trim(),
-        'artistBio': v['artistBio']?.toString().trim(),
-        'coverPath': v['coverPath']?.toString().trim(),
-        'mbid': v['mbid']?.toString().trim(),
-        'favorite': (v['favorite'] is int) ? v['favorite'] : 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
   }
 
   Future<void> replaceAll(List<Map<String, dynamic>> vinyls) async {
