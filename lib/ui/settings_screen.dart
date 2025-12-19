@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/backup_service.dart';
 import '../services/view_mode_service.dart';
-bool _grid = false;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _auto = false;
+  bool _grid = false;
   bool _loading = true;
 
   @override
@@ -23,8 +23,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final v = await BackupService.isAutoEnabled();
+    final g = await ViewModeService.isGridEnabled();
     setState(() {
       _auto = v;
+      _grid = g;
       _loading = false;
     });
   }
@@ -100,6 +102,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: Text(_auto
                         ? 'Se respalda solo cuando agregas o borras vinilos.'
                         : 'Debes usar “Guardar lista” manualmente.'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: SwitchListTile(
+                    value: _grid,
+                    onChanged: (v) async {
+                      setState(() => _grid = v);
+                      await ViewModeService.setGridEnabled(v);
+                      _snack(v ? 'Vista: CUADRÍCULA ✅' : 'Vista: LISTA ✅');
+                    },
+                    secondary: Icon(_grid ? Icons.grid_view : Icons.view_list),
+                    title: const Text('Vista de la lista'),
+                    subtitle: Text(
+                      _grid
+                          ? 'Muestra tus vinilos en cuadrícula (tarjetas).'
+                          : 'Muestra tus vinilos en lista vertical.',
+                    ),
                   ),
                 ),
               ],
