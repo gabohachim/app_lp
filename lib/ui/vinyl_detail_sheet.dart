@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+
+import '../db/vinyl_db.dart';
+import '../services/backup_service.dart';
 import '../services/discography_service.dart';
 
 class VinylDetailSheet extends StatefulWidget {
@@ -15,10 +18,25 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
   List<TrackItem> tracks = [];
   String? msg;
 
+  bool _fav = false;
+
   @override
   void initState() {
     super.initState();
+    _fav = (widget.vinyl['favorite'] ?? 0) == 1;
     _loadTracks();
+  }
+
+  Future<void> _toggleFav() async {
+    final id = widget.vinyl['id'];
+    if (id is! int) return;
+
+    final next = !_fav;
+    await VinylDb.instance.setFavorite(id: id, favorite: next);
+    await BackupService.autoSaveIfEnabled();
+
+    if (!mounted) return;
+    setState(() => _fav = next);
   }
 
   Future<void> _loadTracks() async {
@@ -88,6 +106,13 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                   ),
                 ),
+
+                // ⭐ Favorito
+                IconButton(
+                  onPressed: _toggleFav,
+                  icon: Icon(_fav ? Icons.star : Icons.star_border),
+                ),
+
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),
@@ -95,7 +120,6 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
               ],
             ),
             const SizedBox(height: 10),
-
             Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -105,9 +129,7 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
                 _pill('País', country.isEmpty ? '—' : country),
               ],
             ),
-
             const SizedBox(height: 10),
-
             if (bio.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -118,7 +140,6 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
                 ),
                 child: Text(bio),
               ),
-
             const SizedBox(height: 12),
             Row(
               children: [
@@ -128,14 +149,12 @@ class _VinylDetailSheetState extends State<VinylDetailSheet> {
                 IconButton(onPressed: _loadTracks, icon: const Icon(Icons.refresh)),
               ],
             ),
-
             if (loadingTracks) const LinearProgressIndicator(),
             if (!loadingTracks && msg != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(msg!),
               ),
-
             if (!loadingTracks && tracks.isNotEmpty)
               Expanded(
                 child: ListView.separated(
