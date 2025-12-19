@@ -7,6 +7,7 @@ import '../services/discography_service.dart';
 import '../services/metadata_service.dart';
 import '../services/vinyl_add_service.dart';
 import '../services/backup_service.dart';
+import '../services/view_mode_service.dart';
 import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
@@ -22,6 +23,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Vista vista = Vista.inicio;
+
+  bool _gridView = false;
 
   final artistaCtrl = TextEditingController();
   final albumCtrl = TextEditingController();
@@ -43,6 +46,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool autocompletando = false;
 
   PreparedVinylAdd? prepared; // ✅ lo que devuelve el servicio central
+
+  @override
+  void initState() {
+    super.initState();
+    _loadViewMode();
+  }
+
+  Future<void> _loadViewMode() async {
+    final g = await ViewModeService.isGridEnabled();
+    if (!mounted) return;
+    setState(() => _gridView = g);
+  }
 
   @override
   void dispose() {
@@ -288,6 +303,102 @@ class _HomeScreenState extends State<HomeScreen> {
     return const Icon(Icons.album);
   }
 
+  void _openDetail(Map<String, dynamic> v) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.90,
+        child: VinylDetailSheet(vinyl: v),
+      ),
+    );
+  }
+
+  Widget _gridVinylCard(Map<String, dynamic> v, {required bool conBorrar}) {
+    final year = (v['year'] as String?)?.trim() ?? '';
+    final artista = (v['artista'] as String?)?.trim() ?? '';
+    final album = (v['album'] as String?)?.trim() ?? '';
+
+    return InkWell(
+      onTap: () => _openDetail(v),
+      borderRadius: BorderRadius.circular(14),
+      child: Card(
+        color: Colors.white.withOpacity(0.88),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _gridCover(v),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'LP N° ${v['numero']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    artista,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    album,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(year.isEmpty ? '—' : year),
+                ],
+              ),
+            ),
+            if (conBorrar)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () async {
+                    await VinylDb.instance.deleteById(v['id'] as int);
+                    await BackupService.autoSaveIfEnabled();
+                    snack('Borrado');
+                    setState(() {});
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _gridCover(Map<String, dynamic> v) {
+    final cp = (v['coverPath'] as String?)?.trim() ?? '';
+    if (cp.isNotEmpty) {
+      final f = File(cp);
+      if (f.existsSync()) {
+        return Image.file(f, fit: BoxFit.cover);
+      }
+    }
+    return Container(
+      color: Colors.black12,
+      alignment: Alignment.center,
+      child: const Icon(Icons.album, size: 48),
+    );
+  }
 
   Widget encabezadoInicio() {
     return Row(
@@ -399,8 +510,11 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.list, 'Mostrar lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
         btn(Icons.settings, 'Ajustes', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))
-              .then((_) => setState(() {}));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
+            await _loadViewMode();
+            if (!mounted) return;
+            setState(() {});
+          });
         }),
         const SizedBox(height: 10),
         btn(Icons.delete_outline, 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
@@ -450,7 +564,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         const SizedBox(height: 10),
-
         TextField(
           controller: albumCtrl,
           onChanged: _onAlbumChanged,
@@ -486,11 +599,9 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-
         const SizedBox(height: 10),
         ElevatedButton(onPressed: buscar, child: const Text('Buscar')),
         const SizedBox(height: 12),
-
         if (resultados.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(12),
@@ -525,7 +636,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
         if (mostrarAgregar) ...[
           const SizedBox(height: 12),
           Container(
@@ -552,7 +662,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 10),
-
           if (!autocompletando && p != null && (p.selectedCover500 ?? '').trim().isNotEmpty)
             Container(
               padding: const EdgeInsets.all(10),
@@ -588,7 +697,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
           if (!autocompletando && p != null && p.coverCandidates.length > 1) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -597,7 +705,6 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Elegir carátula (máx 5)'),
             ),
           ],
-
           const SizedBox(height: 10),
           TextField(
             controller: yearCtrl,
@@ -624,6 +731,22 @@ class _HomeScreenState extends State<HomeScreen> {
         final items = snap.data!;
         if (items.isEmpty) return const Text('No tienes vinilos todavía.', style: TextStyle(color: Colors.white));
 
+        if (_gridView) {
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(top: 6),
+            itemCount: items.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.78,
+            ),
+            itemBuilder: (context, i) => _gridVinylCard(items[i], conBorrar: conBorrar),
+          );
+        }
+
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -639,21 +762,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListTile(
                 leading: _leadingCover(v),
                 title: Text('LP N° ${v['numero']} — ${v['artista']} — ${v['album']}'),
-                subtitle: Text('Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}'),
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.white,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                    ),
-                    builder: (_) => SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.90,
-                      child: VinylDetailSheet(vinyl: v),
-                    ),
-                  );
-                },
+                subtitle: Text(
+                  'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
+                ),
+                onTap: () => _openDetail(v),
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
