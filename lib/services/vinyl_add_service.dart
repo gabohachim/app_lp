@@ -23,13 +23,10 @@ class PreparedVinylAdd {
   final String? country;
   final String? bioShort;
 
-  /// ReleaseGroupID/MBID útil para tracklist/cover
   final String? releaseGroupId;
 
-  /// Opciones de carátula (máx 5)
   final List<CoverCandidate> coverCandidates;
 
-  /// Por defecto: la primera opción
   CoverCandidate? selectedCover;
 
   PreparedVinylAdd({
@@ -49,39 +46,38 @@ class PreparedVinylAdd {
 }
 
 class VinylAddService {
-  /// 1) Prepara metadata + artist info + opciones de carátula (máx 5)
   static Future<PreparedVinylAdd> prepare({
     required String artist,
     required String album,
-    String? artistId, // si lo tienes (por autocomplete), mejor
+    String? artistId,
   }) async {
     final a = artist.trim();
     final al = album.trim();
 
-    // Candidatos de carátula (máx 5)
-    final candidatesAll = await MetadataService.fetchCoverCandidates(artist: a, album: al);
+    final candidatesAll =
+        await MetadataService.fetchCoverCandidates(artist: a, album: al);
     final candidates = candidatesAll.take(5).toList();
 
-    // Metadata del álbum (año, género, releaseGroupId) usando candidates
     final meta = await MetadataService.fetchAutoMetadataWithCandidates(
       artist: a,
       album: al,
       candidates: candidates,
     );
 
-    // Info artista (país + reseña en español)
     ArtistInfo info;
     if (artistId != null && artistId.trim().isNotEmpty) {
-      info = await DiscographyService.getArtistInfoById(artistId.trim(), artistName: a);
+      info = await DiscographyService.getArtistInfoById(artistId.trim(),
+          artistName: a);
     } else {
       info = await DiscographyService.getArtistInfo(a);
     }
 
     final country = (info.country ?? '').trim();
     final bio = (info.bio ?? '').trim();
-    final bioShort = bio.isEmpty ? null : (bio.length > 220 ? '${bio.substring(0, 220)}…' : bio);
+    final bioShort =
+        bio.isEmpty ? null : (bio.length > 220 ? '${bio.substring(0, 220)}…' : bio);
 
-    final prepared = PreparedVinylAdd(
+    return PreparedVinylAdd(
       artist: a,
       album: al,
       coverCandidates: candidates,
@@ -90,16 +86,17 @@ class VinylAddService {
       genre: (meta.genre ?? '').trim().isEmpty ? null : meta.genre!.trim(),
       country: country.isEmpty ? null : country,
       bioShort: bioShort,
-      releaseGroupId: (meta.releaseGroupId ?? '').trim().isEmpty ? null : meta.releaseGroupId!.trim(),
+      releaseGroupId: (meta.releaseGroupId ?? '').trim().isEmpty
+          ? null
+          : meta.releaseGroupId!.trim(),
     );
-
-    return prepared;
   }
 
-  /// 2) Agrega a SQLite y guarda carátula local
+  /// ✅ Ahora acepta favorite=true/false
   static Future<AddVinylResult> addPrepared(
     PreparedVinylAdd prepared, {
-    String? overrideYear, // si quieres permitir editar año
+    String? overrideYear,
+    bool favorite = false,
   }) async {
     final artist = prepared.artist.trim();
     final album = prepared.album.trim();
@@ -107,12 +104,10 @@ class VinylAddService {
       return AddVinylResult(ok: false, message: 'Artista y Álbum son obligatorios.');
     }
 
-    // Descargar carátula (si hay). Intentamos con la seleccionada.
     String? coverPath;
     final coverUrl = (prepared.selectedCover500 ?? '').trim();
     if (coverUrl.isNotEmpty) {
       coverPath = await _downloadCoverToLocal(coverUrl);
-      // si falla, NO bloqueamos: se guarda igual, pero sin cover
     }
 
     final y = (overrideYear ?? prepared.year ?? '').trim();
@@ -126,8 +121,9 @@ class VinylAddService {
         artistBio: prepared.bioShort,
         coverPath: coverPath,
         mbid: prepared.releaseGroupId,
+        favorite: favorite,
       );
-      return AddVinylResult(ok: true, message: 'Vinilo agregado ✅');
+      return AddVinylResult(ok: true, message: favorite ? 'Agregado a favoritos ⭐' : 'Vinilo agregado ✅');
     } catch (_) {
       return AddVinylResult(ok: false, message: 'Ese vinilo ya existe (Artista + Álbum).');
     }
@@ -154,4 +150,3 @@ class VinylAddService {
     }
   }
 }
-
