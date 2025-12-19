@@ -244,6 +244,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
           album: al.title,
         );
       }
+      await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
       // revert
