@@ -598,9 +598,9 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
-        // ✅ NUEVO: Lista de deseos (wishlist) — debajo de favoritos
+        // ✅ NUEVO: Lista de deseos (debajo de favoritos)
         btn(Icons.bookmark_border, 'Lista de deseos', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const WishlistScreen())).then((_) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
             setState(() {});
           });
