@@ -70,7 +70,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       loadingAlbums = true;
     });
 
-    final info = await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
+    final info =
+        await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
     final list = await DiscographyService.getDiscographyByArtistId(a.id);
 
     if (!mounted) return;
@@ -96,31 +97,44 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
           child: SingleChildScrollView(child: Text(bio)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _addAlbumToCollection(AlbumItem al, {required bool favorite}) async {
+  Future<void> _addAlbumToCollection(
+    AlbumItem al, {
+    required bool favorite,
+  }) async {
     final artistName = pickedArtist?.name ?? artistCtrl.text.trim();
     if (artistName.isEmpty) return;
 
+    // Prepara metadata + carátula + país, etc.
     final prepared = await VinylAddService.prepare(
       artist: artistName,
       album: al.title,
       artistId: pickedArtist?.id,
     );
 
+    // Agrega a DB como favorito o normal
     final res = await VinylAddService.addPrepared(prepared, favorite: favorite);
     await BackupService.autoSaveIfEnabled();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
-    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(res.message)),
+    );
+    setState(() {}); // refresca íconos (exist/favorite)
   }
 
-  Future<void> _toggleFavoriteExisting({required int id, required bool next}) async {
+  Future<void> _toggleFavoriteExisting({
+    required int id,
+    required bool next,
+  }) async {
     await VinylDb.instance.setFavorite(id: id, favorite: next);
     await BackupService.autoSaveIfEnabled();
     if (!mounted) return;
@@ -195,7 +209,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         children: [
                           Text(
                             artistName,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text('País: ${country.isEmpty ? '—' : country}'),
@@ -216,7 +233,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
             if (msg != null)
               Padding(
                 padding: const EdgeInsets.only(top: 10),
-                child: Text(msg!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  msg!,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
 
             const SizedBox(height: 10),
@@ -239,7 +259,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                 width: 56,
                                 height: 56,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.album),
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.album),
                               ),
                             ),
                             title: Text(al.title),
@@ -248,28 +269,58 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => AlbumTracksScreen(album: al, artistName: artistName),
+                                  builder: (_) => AlbumTracksScreen(
+                                    album: al,
+                                    artistName: artistName,
+                                  ),
                                 ),
                               );
                             },
+
+                            // ✅ AHORA: dos botones (Agregar LP + Favorito)
                             trailing: FutureBuilder<Map<String, dynamic>?>(
-                              future: VinylDb.instance.findByExact(artista: artistName, album: al.title),
+                              future: VinylDb.instance.findByExact(
+                                artista: artistName,
+                                album: al.title,
+                              ),
                               builder: (context, snap2) {
                                 final row = snap2.data;
-                                if (row == null) {
-                                  return IconButton(
-                                    tooltip: 'Agregar a favoritos',
-                                    icon: const Icon(Icons.star_border),
-                                    onPressed: () => _addAlbumToCollection(al, favorite: true),
-                                  );
-                                }
 
-                                final id = row['id'] as int;
-                                final fav = (row['favorite'] ?? 0) == 1;
-                                return IconButton(
-                                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                                  icon: Icon(fav ? Icons.star : Icons.star_border),
-                                  onPressed: () => _toggleFavoriteExisting(id: id, next: !fav),
+                                final exists = row != null;
+                                final fav = exists ? ((row!['favorite'] ?? 0) == 1) : false;
+                                final id = exists ? (row!['id'] as int) : null;
+
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // ➕ Agregar LP (solo si NO existe)
+                                    IconButton(
+                                      tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
+                                      icon: Icon(
+                                        Icons.add_circle_outline,
+                                        color: exists ? Colors.black26 : null,
+                                      ),
+                                      onPressed: exists
+                                          ? null
+                                          : () => _addAlbumToCollection(al, favorite: false),
+                                    ),
+
+                                    // ⭐ Favorito (si no existe: lo agrega como favorito)
+                                    IconButton(
+                                      tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                                      icon: Icon(fav ? Icons.star : Icons.star_border),
+                                      onPressed: () async {
+                                        if (!exists) {
+                                          await _addAlbumToCollection(al, favorite: true);
+                                          return;
+                                        }
+                                        await _toggleFavoriteExisting(
+                                          id: id!,
+                                          next: !fav,
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 );
                               },
                             ),
