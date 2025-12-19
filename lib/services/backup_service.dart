@@ -26,10 +26,9 @@ class BackupService {
     return File(p.join(dir.path, _kFile));
   }
 
-  /// Guarda la lista completa (toda la DB) a un JSON local.
   static Future<void> saveListNow() async {
     final vinyls = await VinylDb.instance.getAll();
-    // Guardamos solo los campos que sabemos restaurar
+
     final payload = vinyls
         .map((v) => <String, dynamic>{
               'numero': v['numero'],
@@ -41,6 +40,7 @@ class BackupService {
               'artistBio': v['artistBio'],
               'coverPath': v['coverPath'],
               'mbid': v['mbid'],
+              'favorite': v['favorite'] ?? 0, // ✅ favoritos
             })
         .toList();
 
@@ -48,7 +48,6 @@ class BackupService {
     await f.writeAsString(jsonEncode(payload));
   }
 
-  /// Carga la lista desde el JSON local y reemplaza la DB completa.
   static Future<void> loadList() async {
     final f = await _backupFile();
     if (!await f.exists()) {
@@ -62,7 +61,6 @@ class BackupService {
     await VinylDb.instance.replaceAll(vinyls);
   }
 
-  /// Si el modo automático está activo, guarda.
   static Future<void> autoSaveIfEnabled() async {
     final on = await isAutoEnabled();
     if (on) {
