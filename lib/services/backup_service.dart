@@ -26,41 +26,61 @@ class BackupService {
     return File(p.join(dir.path, _kFile));
   }
 
+  /// ✅ Guarda la lista completa en JSON e incluye `favorite`.
   static Future<void> saveListNow() async {
     final vinyls = await VinylDb.instance.getAll();
 
-    final payload = vinyls
-        .map((v) => <String, dynamic>{
-              'numero': v['numero'],
-              'artista': v['artista'],
-              'album': v['album'],
-              'year': v['year'],
-              'genre': v['genre'],
-              'country': v['country'],
-              'artistBio': v['artistBio'],
-              'coverPath': v['coverPath'],
-              'mbid': v['mbid'],
-              'favorite': v['favorite'] ?? 0, // ✅ favoritos
-            })
-        .toList();
+    // OJO: normalizamos favorite para que siempre sea 0/1 en el backup.
+    int fav01(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return (v == 1) ? 1 : 0;
+      if (v is bool) return v ? 1 : 0;
+      final s = v.toString().trim().toLowerCase();
+      return (s == '1' || s == 'true') ? 1 : 0;
+    }
+
+    final payload = vinyls.map((v) {
+      return <String, dynamic>{
+        'numero': v['numero'],
+        'artista': v['artista'],
+        'album': v['album'],
+        'year': v['year'],
+        'genre': v['genre'],
+        'country': v['country'],
+        'artistBio': v['artistBio'],
+        'coverPath': v['coverPath'],
+        'mbid': v['mbid'],
+        'favorite': fav01(v['favorite']), // ✅ AQUÍ VA FAVORITO
+      };
+    }).toList();
 
     final f = await _backupFile();
     await f.writeAsString(jsonEncode(payload));
   }
 
+  /// ✅ Carga la lista desde JSON. Si el backup viene sin `favorite`,
+  /// lo asume como 0 (no favorito) para compatibilidad con backups antiguos.
   static Future<void> loadList() async {
     final f = await _backupFile();
     if (!await f.exists()) {
       throw Exception('No existe un respaldo aún.');
     }
+
     final raw = await f.readAsString();
     final data = jsonDecode(raw);
     if (data is! List) throw Exception('Respaldo inválido.');
 
-    final vinyls = data.cast<Map>().map((m) => m.cast<String, dynamic>()).toList();
+    // Compat: aseguramos que cada item tenga favorite (0/1)
+    final vinyls = data.map<Map<String, dynamic>>((e) {
+      final m = (e as Map).cast<String, dynamic>();
+      m['favorite'] = (m['favorite'] == 1 || m['favorite'] == true) ? 1 : 0;
+      return m;
+    }).toList();
+
     await VinylDb.instance.replaceAll(vinyls);
   }
 
+  /// Si está habilitado, guarda automáticamente.
   static Future<void> autoSaveIfEnabled() async {
     final on = await isAutoEnabled();
     if (on) {
