@@ -70,7 +70,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       loadingAlbums = true;
     });
 
-    final info = await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
+    final info =
+        await DiscographyService.getArtistInfoById(a.id, artistName: a.name);
     final list = await DiscographyService.getDiscographyByArtistId(a.id);
 
     if (!mounted) return;
@@ -123,7 +124,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
         artistId: pickedArtist?.id,
       );
     } else {
-      await VinylDb.instance.removeWishlistExact(artista: artistName, album: al.title);
+      await VinylDb.instance.removeWishlistExact(
+        artista: artistName,
+        album: al.title,
+      );
     }
     if (!mounted) return;
     setState(() {});
@@ -148,6 +152,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
             if (searchingArtists) const LinearProgressIndicator(),
 
             if (artistResults.isNotEmpty)
@@ -185,7 +190,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         final al = albums[i];
                         final year = al.year ?? '—';
 
-                        // Future que trae: (si existe en colección) y (si existe en wishlist)
                         final f = Future.wait([
                           VinylDb.instance.findByExact(artista: artistName, album: al.title),
                           VinylDb.instance.findWishlistByExact(artista: artistName, album: al.title),
@@ -209,16 +213,24 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => AlbumTracksScreen(album: al, artistName: artistName),
+                                  builder: (_) => AlbumTracksScreen(
+                                    album: al,
+                                    artistName: artistName,
+                                  ),
                                 ),
                               );
                             },
+
                             trailing: FutureBuilder<List<dynamic>>(
                               future: f,
                               builder: (context, snap) {
                                 final list = snap.data;
-                                final rowVinyl = (list != null && list.isNotEmpty) ? list[0] as Map<String, dynamic>? : null;
-                                final rowWish  = (list != null && list.length > 1) ? list[1] as Map<String, dynamic>? : null;
+                                final rowVinyl = (list != null && list.isNotEmpty)
+                                    ? list[0] as Map<String, dynamic>?
+                                    : null;
+                                final rowWish = (list != null && list.length > 1)
+                                    ? list[1] as Map<String, dynamic>?
+                                    : null;
 
                                 final exists = rowVinyl != null;
                                 final fav = exists ? ((rowVinyl!['favorite'] ?? 0) == 1) : false;
@@ -232,8 +244,13 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                     // ➕ Agregar LP (solo si NO existe)
                                     IconButton(
                                       tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
-                                      icon: Icon(Icons.add_circle_outline, color: exists ? Colors.black26 : null),
-                                      onPressed: exists ? null : () => _addAlbumToCollection(al, favorite: false),
+                                      icon: Icon(
+                                        Icons.add_circle_outline,
+                                        color: exists ? Colors.black26 : null,
+                                      ),
+                                      onPressed: exists
+                                          ? null
+                                          : () => _addAlbumToCollection(al, favorite: false),
                                     ),
 
                                     // ⭐ Favorito (si no existe: agrega como favorito)
@@ -249,10 +266,13 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       },
                                     ),
 
-                                    // 🛒 Wishlist (NO compra, NO numeración)
+                                    // 🛒 Wishlist: ✅ GRIS si ya está en deseos
                                     IconButton(
                                       tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
-                                      icon: Icon(inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined),
+                                      icon: Icon(
+                                        inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
+                                        color: inWish ? Colors.grey : null, // ✅ gris
+                                      ),
                                       onPressed: () => _toggleWishlist(
                                         artistName: artistName,
                                         al: al,
