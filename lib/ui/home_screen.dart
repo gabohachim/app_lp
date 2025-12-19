@@ -73,6 +73,81 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
+  // ----------------- RESET BUSCADOR (Cancelar) -----------------
+
+  void _cancelarBusqueda() {
+    FocusScope.of(context).unfocus();
+    _debounceArtist?.cancel();
+    _debounceAlbum?.cancel();
+
+    setState(() {
+      artistaCtrl.clear();
+      albumCtrl.clear();
+      yearCtrl.clear();
+
+      buscandoArtistas = false;
+      buscandoAlbums = false;
+      sugerenciasArtistas = [];
+      sugerenciasAlbums = [];
+
+      artistaElegido = null;
+      albumElegido = null;
+
+      resultados = [];
+      prepared = null;
+      mostrarAgregar = false;
+      autocompletando = false;
+    });
+  }
+
+  void _limpiarArtista() {
+    FocusScope.of(context).unfocus();
+    _debounceArtist?.cancel();
+    _debounceAlbum?.cancel();
+
+    setState(() {
+      artistaCtrl.clear();
+      albumCtrl.clear();
+      yearCtrl.clear();
+
+      buscandoArtistas = false;
+      buscandoAlbums = false;
+
+      sugerenciasArtistas = [];
+      sugerenciasAlbums = [];
+
+      artistaElegido = null;
+      albumElegido = null;
+
+      resultados = [];
+      prepared = null;
+      mostrarAgregar = false;
+      autocompletando = false;
+    });
+  }
+
+  void _limpiarAlbum() {
+    FocusScope.of(context).unfocus();
+    _debounceAlbum?.cancel();
+
+    setState(() {
+      albumCtrl.clear();
+      yearCtrl.clear();
+
+      buscandoAlbums = false;
+      sugerenciasAlbums = [];
+
+      albumElegido = null;
+
+      resultados = [];
+      prepared = null;
+      mostrarAgregar = false;
+      autocompletando = false;
+    });
+  }
+
+  // ----------------- FAVORITOS (colección) -----------------
+
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
@@ -89,11 +164,15 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
+  // ----------------- WISHLIST (lista deseos) -----------------
+
   Future<void> _removeWishlistItem(int id) async {
     await VinylDb.instance.removeWishlistById(id);
     if (!mounted) return;
     setState(() {});
   }
+
+  // ----------------- DETALLE -----------------
 
   void _openDetail(Map<String, dynamic> v) {
     showModalBottomSheet(
@@ -112,6 +191,8 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {});
     });
   }
+
+  // ----------------- UI helpers -----------------
 
   Widget _numeroBadge(dynamic numero) {
     return Container(
@@ -158,6 +239,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ----------------- HOME widgets -----------------
+
   Widget encabezadoInicio() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // contador centrado
+  // ✅ Contador centrado
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
@@ -289,9 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ----------------- BUSCAR (la misma versión que ya tienes) -----------------
-  // NOTA: No cambié tu lógica de buscar en este mensaje para no romper nada.
-  // Si necesitas, dime y te lo dejo también con wishlist/fav integrados.
+  // ----------------- BUSCAR (autocompletado + auto metadata) -----------------
 
   void _onArtistChanged(String v) {
     _debounceArtist?.cancel();
@@ -335,6 +416,10 @@ class _HomeScreenState extends State<HomeScreen> {
       albumCtrl.clear();
       albumElegido = null;
       sugerenciasAlbums = [];
+      prepared = null;
+      mostrarAgregar = false;
+      resultados = [];
+      yearCtrl.clear();
     });
   }
 
@@ -348,6 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
       prepared = null;
       mostrarAgregar = false;
       resultados = [];
+      yearCtrl.clear();
     });
 
     if (artistName.isEmpty || q.isEmpty) {
@@ -378,6 +464,10 @@ class _HomeScreenState extends State<HomeScreen> {
       albumElegido = a;
       albumCtrl.text = a.title;
       sugerenciasAlbums = [];
+      prepared = null;
+      mostrarAgregar = false;
+      resultados = [];
+      yearCtrl.clear();
     });
   }
 
@@ -496,6 +586,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget vistaBuscar() {
     final p = prepared;
+    final showXArtist = artistaCtrl.text.trim().isNotEmpty;
+    final showXAlbum = albumCtrl.text.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -508,6 +600,13 @@ class _HomeScreenState extends State<HomeScreen> {
             filled: true,
             fillColor: Colors.white.withOpacity(0.85),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            suffixIcon: showXArtist
+                ? IconButton(
+                    tooltip: 'Limpiar',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: _limpiarArtista,
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 6),
@@ -545,6 +644,13 @@ class _HomeScreenState extends State<HomeScreen> {
             filled: true,
             fillColor: Colors.white.withOpacity(0.85),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            suffixIcon: showXAlbum
+                ? IconButton(
+                    tooltip: 'Limpiar',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: _limpiarAlbum,
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 6),
@@ -574,7 +680,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
         const SizedBox(height: 10),
+
         ElevatedButton(onPressed: buscar, child: const Text('Buscar')),
+        const SizedBox(height: 8),
+
+        // ✅ NUEVO: Cancelar (cancela y limpia TODO)
+        OutlinedButton(
+          onPressed: _cancelarBusqueda,
+          child: const Text('Cancelar'),
+        ),
 
         const SizedBox(height: 12),
 
@@ -748,24 +862,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
+            // ✅ número arriba derecha
             Positioned(
               right: 8,
               top: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.70),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${v['numero']}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+              child: _numeroBadge(v['numero']),
             ),
 
             if (!conBorrar)
@@ -845,6 +946,8 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
+
+                // ✅ badge arriba derecha (sin LP)
                 title: Stack(
                   children: [
                     Padding(
@@ -855,13 +958,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: _numeroBadge(v['numero']),
+                    ),
                   ],
                 ),
+
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
                 onTap: () => _openDetail(v),
+
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
