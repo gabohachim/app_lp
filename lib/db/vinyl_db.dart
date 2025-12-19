@@ -18,7 +18,7 @@ class VinylDb {
 
     return openDatabase(
       path,
-      version: 5, // ✅ subimos versión por country
+      version: 6, // ✅ subimos versión por favoritos
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE vinyls(
@@ -31,11 +31,13 @@ class VinylDb {
             country TEXT,
             artistBio TEXT,
             coverPath TEXT,
-            mbid TEXT
+            mbid TEXT,
+            favorite INTEGER NOT NULL DEFAULT 0
           );
         ''');
         await d.execute('CREATE INDEX idx_artist ON vinyls(artista);');
         await d.execute('CREATE INDEX idx_album ON vinyls(album);');
+        await d.execute('CREATE INDEX idx_fav ON vinyls(favorite);');
       },
       onUpgrade: (d, oldV, newV) async {
         // migraciones sin perder datos
@@ -47,6 +49,10 @@ class VinylDb {
         }
         if (oldV < 5) {
           await d.execute('ALTER TABLE vinyls ADD COLUMN country TEXT;');
+        }
+        if (oldV < 6) {
+          await d.execute('ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
+          await d.execute('CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
         }
       },
     );
@@ -61,6 +67,25 @@ class VinylDb {
   Future<List<Map<String, dynamic>>> getAll() async {
     final d = await db;
     return d.query('vinyls', orderBy: 'numero ASC');
+  }
+
+  Future<List<Map<String, dynamic>>> getFavorites() async {
+    final d = await db;
+    return d.query(
+      'vinyls',
+      where: 'favorite = 1',
+      orderBy: 'numero ASC',
+    );
+  }
+
+  Future<void> setFavorite({required int id, required bool favorite}) async {
+    final d = await db;
+    await d.update(
+      'vinyls',
+      {'favorite': favorite ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<List<Map<String, dynamic>>> search({
@@ -125,6 +150,7 @@ class VinylDb {
     String? artistBio,
     String? coverPath,
     String? mbid,
+    bool favorite = false,
   }) async {
     final d = await db;
 
@@ -145,20 +171,22 @@ class VinylDb {
         'artistBio': artistBio?.trim(),
         'coverPath': coverPath?.trim(),
         'mbid': mbid?.trim(),
+        'favorite': favorite ? 1 : 0,
       },
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
 
-  
-
-  /// Borra toda la tabla (para restaurar respaldos).
   Future<void> deleteAll() async {
     final d = await db;
     await d.delete('vinyls');
   }
 
-  /// Inserta un vinilo usando un map (se usa para restaurar respaldos).
+  Future<void> deleteById(int id) async {
+    final d = await db;
+    await d.delete('vinyls', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<void> insertFromMap(Map<String, dynamic> v) async {
     final d = await db;
     await d.insert(
@@ -173,12 +201,12 @@ class VinylDb {
         'artistBio': v['artistBio']?.toString().trim(),
         'coverPath': v['coverPath']?.toString().trim(),
         'mbid': v['mbid']?.toString().trim(),
+        'favorite': (v['favorite'] is int) ? v['favorite'] : 0,
       },
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
 
-  /// Reemplaza completamente la lista por la de un respaldo.
   Future<void> replaceAll(List<Map<String, dynamic>> vinyls) async {
     final d = await db;
     await d.transaction((txn) async {
@@ -196,14 +224,11 @@ class VinylDb {
             'artistBio': v['artistBio']?.toString().trim(),
             'coverPath': v['coverPath']?.toString().trim(),
             'mbid': v['mbid']?.toString().trim(),
+            'favorite': (v['favorite'] is int) ? v['favorite'] : 0,
           },
           conflictAlgorithm: ConflictAlgorithm.abort,
         );
       }
     });
-  }
-Future<void> deleteById(int id) async {
-    final d = await db;
-    await d.delete('vinyls', where: 'id=?', whereArgs: [id]);
   }
 }
