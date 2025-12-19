@@ -11,6 +11,7 @@ import '../services/view_mode_service.dart';
 import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
+import 'wishlist_screen.dart';
 
 enum Vista { inicio, buscar, lista, favoritos, borrar }
 
@@ -287,21 +288,21 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             // 🗑️ borrar (lo dejamos arriba derecha)
-           if (conBorrar)
-  Positioned(
-    left: 2,
-    bottom: 2,
-    child: IconButton(
-      icon: const Icon(Icons.delete),
-      onPressed: () async {
-        await VinylDb.instance.deleteById(v['id'] as int);
-        await BackupService.autoSaveIfEnabled();
-        snack('Borrado');
-        setState(() {});
-      },
-    ),
-  ),
-        ],
+            if (conBorrar)
+              Positioned(
+                left: 2,
+                bottom: 2,
+                child: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () async {
+                    await VinylDb.instance.deleteById(v['id'] as int);
+                    await BackupService.autoSaveIfEnabled();
+                    snack('Borrado');
+                    setState(() {});
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -597,6 +598,15 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
+        // ✅ NUEVO: Lista de deseos (wishlist) — debajo de favoritos
+        btn(Icons.bookmark_border, 'Lista de deseos', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const WishlistScreen())).then((_) {
+            if (!mounted) return;
+            setState(() {});
+          });
+        }),
+        const SizedBox(height: 10),
+
         btn(Icons.settings, 'Ajustes', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
@@ -658,10 +668,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 : null,
           ),
         ),
-        if (buscandoArtistas) const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: LinearProgressIndicator(),
-        ),
+        if (buscandoArtistas)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: LinearProgressIndicator(),
+          ),
         if (sugerenciasArtistas.isNotEmpty)
           suggestionBox<ArtistHit>(
             items: sugerenciasArtistas,
@@ -695,10 +706,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 : null,
           ),
         ),
-        if (buscandoAlbums) const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: LinearProgressIndicator(),
-        ),
+        if (buscandoAlbums)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: LinearProgressIndicator(),
+          ),
         if (sugerenciasAlbums.isNotEmpty)
           suggestionBox<AlbumSuggest>(
             items: sugerenciasAlbums,
@@ -781,7 +793,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Text('Agregar este vinilo', style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 if (autocompletando) const LinearProgressIndicator(),
-
                 if (!autocompletando && p != null) ...[
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
