@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ).then((_) {
       if (!mounted) return;
-      setState(() {}); // por si cambiaste fav en el detalle
+      setState(() {});
     });
   }
 
@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.70),
+        color: Colors.black.withOpacity(0.75),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -202,32 +202,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // contador: solo número (colección, NO wishlist)
+  // ✅ Contador centrado dentro del cuadro (tu arreglo pedido)
   Widget contadorLp() {
     return FutureBuilder<int>(
       future: VinylDb.instance.getCount(),
       builder: (context, snap) {
         final total = snap.data ?? 0;
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Container(
-            width: 90,
-            height: 70,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.65),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                '$total',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+        return Container(
+          width: 90,
+          height: 70,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.center, // ✅ CENTRADO
+          child: Text(
+            '$total',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
             ),
           ),
         );
@@ -404,7 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Buscar en tu colección
     final res = await VinylDb.instance.search(artista: artista, album: album);
 
     setState(() {
@@ -416,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     snack(res.isEmpty ? 'No lo tienes' : 'Ya lo tienes');
 
-    // Si no está: autocompletar metadata
     if (mostrarAgregar) {
       setState(() => autocompletando = true);
 
@@ -434,9 +426,6 @@ class _HomeScreenState extends State<HomeScreen> {
         autocompletando = false;
       });
     }
-
-    // NO borramos campos para que puedas corregir y volver a buscar
-    // (si quieres que se limpien al buscar, lo cambio)
   }
 
   Future<void> elegirCaratula() async {
@@ -768,13 +757,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // número
-            Positioned(left: 8, top: 8, child: _numeroBadge(v['numero'])),
+            // ✅ número arriba derecha
+            Positioned(
+              right: 8,
+              top: 8,
+              child: _numeroBadge(v['numero']),
+            ),
 
-            // ⭐ (no en borrar)
+            // ⭐ a la izquierda (no choca con el número)
             if (!conBorrar)
               Positioned(
-                right: 6,
+                left: 6,
                 top: 6,
                 child: IconButton(
                   tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
@@ -785,7 +778,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             if (conBorrar)
               Positioned(
-                right: 6,
+                left: 6,
                 top: 6,
                 child: IconButton(
                   icon: const Icon(Icons.delete),
@@ -850,18 +843,22 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListTile(
                 leading: _leadingCover(v),
 
-                // badge número + artista/album (sin "LP N°")
+                // ✅ badge arriba derecha (sin LP)
                 title: Stack(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(left: 26),
+                      padding: const EdgeInsets.only(right: 28),
                       child: Text(
                         '${v['artista']} — ${v['album']}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Positioned(left: 0, top: 0, child: _numeroBadge(v['numero'])),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: _numeroBadge(v['numero']),
+                    ),
                   ],
                 ),
 
@@ -985,10 +982,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget? _buildFab() {
-    if (vista == Vista.lista ||
-        vista == Vista.favoritos ||
-        vista == Vista.deseos ||
-        vista == Vista.borrar) {
+    if (vista == Vista.lista || vista == Vista.favoritos || vista == Vista.deseos || vista == Vista.borrar) {
       return FloatingActionButton.extended(
         onPressed: () => setState(() => vista = Vista.inicio),
         icon: const Icon(Icons.home),
