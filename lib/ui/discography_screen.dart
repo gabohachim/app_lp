@@ -261,19 +261,26 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
               ),
             ),
             if (searchingArtists) const LinearProgressIndicator(),
+
+            // ✅ Resultados artista: ahora muestra País debajo
             if (artistResults.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
                 itemCount: artistResults.length,
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
+                  final c = (a.country ?? '').trim();
+
                   return ListTile(
                     title: Text(a.name),
+                    subtitle: c.isEmpty ? null : Text('País: $c'),
                     onTap: () => _pickArtist(a),
                   );
                 },
               ),
+
             const SizedBox(height: 10),
+
             Expanded(
               child: loadingAlbums
                   ? const Center(child: CircularProgressIndicator())
@@ -306,6 +313,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               ),
                             ),
                             title: Text(al.title),
+
+                            // ✅ Año a la izquierda, botones alineados a la derecha
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
@@ -324,7 +333,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       active: fav,
                                       onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
-                                    // 🛒 SIEMPRE carrito de compra
+                                    // 🛒 siempre carrito de compra
                                     _miniBtn(
                                       icon: Icons.shopping_cart,
                                       active: inWish,
@@ -334,6 +343,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                 ),
                               ],
                             ),
+
                             onTap: () {
                               Navigator.push(
                                 context,
