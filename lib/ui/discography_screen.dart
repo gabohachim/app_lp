@@ -258,6 +258,23 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     }
   }
 
+  // Botón pequeño para la fila del año (más compacto)
+  IconButton _miniBtn({
+    required Widget icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: icon,
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      splashRadius: 18,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final artistName = pickedArtist?.name ?? artistCtrl.text.trim();
@@ -326,44 +343,44 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               ),
                             ),
                             title: Text(al.title),
-                            subtitle: Text('Año: $year'),
 
-                            // ✅ iconos en columna al borde derecho
-                            trailing: SizedBox(
-                              width: 44,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  // 1) ➕ Agregar
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.add_circle_outline,
-                                      color: exists ? Colors.black26 : null,
-                                    ),
-                                    tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
-                                    onPressed: (busy || exists)
-                                        ? null
-                                        : () => _addAlbumOptimistic(artistName, al, favorite: false),
-                                  ),
+                            // ✅ ABAJO: Año a la izquierda y botones a la derecha
+                            subtitle: Row(
+                              children: [
+                                Expanded(
+                                  child: Text('Año: $year'),
+                                ),
+                                const SizedBox(width: 6),
 
-                                  // 2) ⭐ Favoritos
-                                  IconButton(
-                                    icon: Icon(fav ? Icons.star : Icons.star_border),
-                                    tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                                    onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
+                                // ➕ Agregar (al lado derecho del año)
+                                _miniBtn(
+                                  icon: Icon(
+                                    Icons.add_circle_outline,
+                                    color: exists ? Colors.black26 : null,
                                   ),
+                                  tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
+                                  onPressed: (busy || exists)
+                                      ? null
+                                      : () => _addAlbumOptimistic(artistName, al, favorite: false),
+                                ),
 
-                                  // 3) 🛒 Lista de deseos
-                                  IconButton(
-                                    icon: Icon(
-                                      inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
-                                      color: inWish ? Colors.grey : null,
-                                    ),
-                                    tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
-                                    onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
+                                // ⭐ Favoritos
+                                _miniBtn(
+                                  icon: Icon(fav ? Icons.star : Icons.star_border),
+                                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                                  onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
+                                ),
+
+                                // 🛒 Lista de deseos
+                                _miniBtn(
+                                  icon: Icon(
+                                    inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
+                                    color: inWish ? Colors.grey : null,
                                   ),
-                                ],
-                              ),
+                                  tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
+                                  onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
+                                ),
+                              ],
                             ),
 
                             onTap: () {
