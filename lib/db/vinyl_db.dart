@@ -18,7 +18,7 @@ class VinylDb {
 
     return openDatabase(
       path,
-      version: 6,
+      version: 7, // ✅ nuevo: wishlist
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE vinyls(
@@ -38,6 +38,21 @@ class VinylDb {
         await d.execute('CREATE INDEX idx_artist ON vinyls(artista);');
         await d.execute('CREATE INDEX idx_album ON vinyls(album);');
         await d.execute('CREATE INDEX idx_fav ON vinyls(favorite);');
+
+        // ✅ tabla wishlist (no tiene numero)
+        await d.execute('''
+          CREATE TABLE wishlist(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            artista TEXT NOT NULL,
+            album TEXT NOT NULL,
+            year TEXT,
+            cover250 TEXT,
+            cover500 TEXT,
+            artistId TEXT,
+            createdAt INTEGER NOT NULL
+          );
+        ''');
+        await d.execute('CREATE UNIQUE INDEX idx_wish_unique ON wishlist(artista, album);');
       },
       onUpgrade: (d, oldV, newV) async {
         if (oldV < 3) {
@@ -50,13 +65,29 @@ class VinylDb {
           await d.execute('ALTER TABLE vinyls ADD COLUMN country TEXT;');
         }
         if (oldV < 6) {
-          await d.execute(
-              'ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
+          await d.execute('ALTER TABLE vinyls ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;');
           await d.execute('CREATE INDEX IF NOT EXISTS idx_fav ON vinyls(favorite);');
+        }
+        if (oldV < 7) {
+          await d.execute('''
+            CREATE TABLE IF NOT EXISTS wishlist(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              artista TEXT NOT NULL,
+              album TEXT NOT NULL,
+              year TEXT,
+              cover250 TEXT,
+              cover500 TEXT,
+              artistId TEXT,
+              createdAt INTEGER NOT NULL
+            );
+          ''');
+          await d.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_wish_unique ON wishlist(artista, album);');
         }
       },
     );
   }
+
+  // ---------------- VINYLS (colección) ----------------
 
   Future<int> getCount() async {
     final d = await db;
@@ -189,11 +220,6 @@ class VinylDb {
     );
   }
 
-  Future<void> deleteAll() async {
-    final d = await db;
-    await d.delete('vinyls');
-  }
-
   Future<void> deleteById(int id) async {
     final d = await db;
     await d.delete('vinyls', where: 'id = ?', whereArgs: [id]);
@@ -216,13 +242,75 @@ class VinylDb {
             'artistBio': v['artistBio']?.toString().trim(),
             'coverPath': v['coverPath']?.toString().trim(),
             'mbid': v['mbid']?.toString().trim(),
-            'favorite': (v['favorite'] is int)
-                ? v['favorite']
-                : ((v['favorite'] == true) ? 1 : 0),
+            'favorite': (v['favorite'] == 1 || v['favorite'] == true) ? 1 : 0,
           },
           conflictAlgorithm: ConflictAlgorithm.abort,
         );
       }
     });
+  }
+
+  // ---------------- WISHLIST (lista deseos) ----------------
+
+  Future<List<Map<String, dynamic>>> getWishlist() async {
+    final d = await db;
+    return d.query('wishlist', orderBy: 'createdAt DESC');
+  }
+
+  Future<Map<String, dynamic>?> findWishlistByExact({
+    required String artista,
+    required String album,
+  }) async {
+    final d = await db;
+    final a = artista.trim().toLowerCase();
+    final al = album.trim().toLowerCase();
+    final rows = await d.query(
+      'wishlist',
+      where: 'LOWER(artista)=? AND LOWER(album)=?',
+      whereArgs: [a, al],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<void> addToWishlist({
+    required String artista,
+    required String album,
+    String? year,
+    String? cover250,
+    String? cover500,
+    String? artistId,
+  }) async {
+    final d = await db;
+    await d.insert(
+      'wishlist',
+      {
+        'artista': artista.trim(),
+        'album': album.trim(),
+        'year': year?.trim(),
+        'cover250': cover250?.trim(),
+        'cover500': cover500?.trim(),
+        'artistId': artistId?.trim(),
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore, // si ya existe, no duplica
+    );
+  }
+
+  Future<void> removeWishlistById(int id) async {
+    final d = await db;
+    await d.delete('wishlist', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> removeWishlistExact({
+    required String artista,
+    required String album,
+  }) async {
+    final d = await db;
+    await d.delete(
+      'wishlist',
+      where: 'LOWER(artista)=? AND LOWER(album)=?',
+      whereArgs: [artista.trim().toLowerCase(), album.trim().toLowerCase()],
+    );
   }
 }
