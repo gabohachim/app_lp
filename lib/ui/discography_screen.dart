@@ -327,58 +327,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             title: Text(al.title),
                             subtitle: Text('Año: $year'),
 
-                            // ✅ iconos en columna al borde derecho (como pediste)
+                            // ✅ iconos en columna al borde derecho
                             trailing: SizedBox(
                               width: 44,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.add_circle_outline,
-                                      color: exists ? Colors.black26 : null,
-                                    ),
-                                    tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
-                                    onPressed: (busy || exists)
-                                        ? null
-                                        : () => _addAlbumOptimistic(artistName, al, favorite: false),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(fav ? Icons.star : Icons.star_border),
-                                    tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                                    onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      inWish ? Icons.shopping_cart : Icons.shopping_cart_outlined,
-                                      color: inWish ? Colors.grey : null,
-                                    ),
-                                    tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
-                                    onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => AlbumTracksScreen(
-                                    album: al,
-                                    artistName: artistName,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+                              child
