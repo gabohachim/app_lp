@@ -608,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 10),
 
       // 📚 Lista de vinilos (líneas, mismo icono que Agregar en Discografías)
-      btn(Icons.library_music, 'Lista de vinilos', () {
+      btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         setState(() => vista = Vista.lista);
       }),
       const SizedBox(height: 10),
