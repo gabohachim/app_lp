@@ -617,14 +617,15 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 10),
 
         // ✅ sin "Mostrar"
-        btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        // ✅ Icono de "líneas" (mismo estilo para lista/agregar)
+        btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
 
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
-        // ✅ NUEVO: Lista de deseos (debajo de favoritos)
-        btn(Icons.bookmark_border, 'Lista de deseos', () {
+        // ✅ Lista de deseos con icono carrito (mismo que discografía)
+        btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
             setState(() {});
