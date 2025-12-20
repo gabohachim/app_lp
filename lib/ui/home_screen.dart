@@ -23,9 +23,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // ⭐ Cache local para favoritos (cambio instantáneo en lista y en favoritos)
+  // ⭐ Cache local para favoritos (cambio instantáneo)
   final Map<int, bool> _favCache = {};
-  int _reloadTick = 0; // fuerza recargas de FutureBuilder
+  int _reloadTick = 0;
 
   Vista vista = Vista.inicio;
 
@@ -149,19 +149,26 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
+  bool _isFav(Map<String, dynamic> v) {
+    final id = v['id'];
+    final dbFav = (v['favorite'] ?? 0) == 1;
+    if (id is int) return _favCache[id] ?? dbFav;
+    return dbFav;
+  }
+
+
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
 
-    final dbFav = (v['favorite'] ?? 0) == 1;
-    final current = _favCache[id] ?? dbFav;
+    final current = _isFav(v);
     final next = !current;
 
-    // ✅ Optimista: cambia al instante (lista y favoritos)
+    // ✅ Optimista: cambia al tiro
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
-      _reloadTick++; // fuerza que FutureBuilder vuelva a consultar DB cuando cambias de vista
+      _reloadTick++;
     });
 
     try {
@@ -169,16 +176,13 @@ class _HomeScreenState extends State<HomeScreen> {
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // ❌ revert
+      // revert
       setState(() {
         _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
         _reloadTick++;
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error actualizando favorito.')),
-      );
+      snack('Error actualizando favorito.');
     }
   }
 
@@ -251,9 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final year = (v['year'] as String?)?.trim() ?? '';
     final artista = (v['artista'] as String?)?.trim() ?? '';
     final album = (v['album'] as String?)?.trim() ?? '';
-    final id = v['id'];
-            final dbFav = (v['favorite'] ?? 0) == 1;
-            final fav = (id is int) ? (_favCache[id] ?? dbFav) : dbFav;
+    final fav = _isFav(v);
 
     return InkWell(
       onTap: () => _openDetail(v),
@@ -310,12 +312,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (abajo derecha, pegado a la esquina)
+            // 🗑️ borrar (lo dejamos arriba derecha)
             if (conBorrar)
               Positioned(
-                right: 2,
+                left: 2,
                 bottom: 2,
-child: IconButton(
+                child: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () async {
                     await VinylDb.instance.deleteById(v['id'] as int);
@@ -887,23 +889,16 @@ child: IconButton(
   }
 
   Widget listaCompleta({required bool conBorrar, required bool onlyFavorites}) {
-    final fut = onlyFavorites ? VinylDb.instance.getFavorites() : VinylDb.instance.getAll();
+    final fut = VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey('listaCompleta_${onlyFavorites}_$conBorrar' + _reloadTick.toString()),
+      key: ValueKey('listaCompleta_' + onlyFavorites.toString() + '_' + conBorrar.toString() + '_' + _reloadTick.toString()),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
         final rawItems = snap.data!;
-        // ✅ Si estamos en favoritos, filtramos usando cache local si existe
         final items = onlyFavorites
-            ? rawItems.where((v) {
-                final id = v['id'];
-                if (id is! int) return false;
-                final dbFav = (v['favorite'] ?? 0) == 1;
-                final fav = _favCache[id] ?? dbFav;
-                return fav;
-              }).toList()
+            ? rawItems.where((v) => _isFav(v)).toList()
             : rawItems;
         if (items.isEmpty) {
           return Text(
@@ -937,9 +932,7 @@ child: IconButton(
             final year = (v['year'] as String?)?.trim() ?? '—';
             final genre = (v['genre'] as String?)?.trim();
             final country = (v['country'] as String?)?.trim();
-            final id = v['id'];
-            final dbFav = (v['favorite'] ?? 0) == 1;
-            final fav = (id is int) ? (_favCache[id] ?? dbFav) : dbFav;
+            final fav = _isFav(v);
 
             return Card(
               color: Colors.white.withOpacity(0.88),
