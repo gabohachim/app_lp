@@ -161,31 +161,77 @@ class _HomeScreenState extends State<HomeScreen> {
     final id = v['id'];
     if (id is! int) return;
 
-    final current = _isFav(v);
+    final current = (v['favorite'] ?? 0) == 1;
     final next = !current;
 
     // ✅ UI inmediata
     setState(() {
-      _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
-      _reloadTick++;
     });
+
+    // ✅ Guardar en DB
+    try {
+      await VinylDb.instance.setFavorite(id: id, favorite: next);
+      await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      if (!mounted) return;
+      // revertir si falla
+      setState(() {
+        v['favorite'] = current ? 1 : 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error actualizando favorito.')),
+      );
+    }
+  });
 
     try {
       await VinylDb.instance.setFavorite(id: id, favorite: next);
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // ❌ revertir
       setState(() {
         _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
         _reloadTick++;
       });
     }
+  });
+
+    try {
+      await VinylDb.instance.setFavorite(id: id, favorite: next);
+      await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      if (!mounted) return;
+      // revert
+      setState(() {
+        _favCache[id] = current;
+        v['favorite'] = current ? 1 : 0;
+        _reloadTick++;
+      });
+      snack('Error actualizando favorito.');
+    }
   }
 
-Widget _numeroBadge(dynamic numero) {
+  void _openDetail(Map<String, dynamic> v) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.90,
+        child: VinylDetailSheet(vinyl: v),
+      ),
+    ).then((_) {
+      if (!mounted) return;
+      setState(() {}); // por si cambiaste favorito en el detalle
+    });
+  }
+
+  Widget _numeroBadge(dynamic numero) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
