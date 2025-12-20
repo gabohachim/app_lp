@@ -25,7 +25,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   ArtistHit? pickedArtist;
   List<AlbumItem> albums = [];
 
-  // Estado optimista (cambio inmediato de iconos)
+  // estado optimista
   final Map<String, bool> _exists = {};
   final Map<String, bool> _fav = {};
   final Map<String, int?> _vinylId = {};
@@ -74,7 +74,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       albums = [];
       loadingAlbums = true;
 
-      // limpiar caches al cambiar artista
       _exists.clear();
       _fav.clear();
       _vinylId.clear();
@@ -119,7 +118,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     final key = _k(artistName, al.title);
     if (_busy[key] == true) return;
 
-    // ✅ Optimista: cambia UI al tiro
     setState(() {
       _busy[key] = true;
       _exists[key] = true;
@@ -139,14 +137,12 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       if (!mounted) return;
 
       if (!res.ok) {
-        // revert
         setState(() {
           _exists.remove(key);
           _vinylId.remove(key);
           _fav.remove(key);
         });
       } else {
-        // refrescar id real
         final row = await VinylDb.instance.findByExact(artista: artistName, album: al.title);
         if (!mounted) return;
         setState(() {
@@ -288,7 +284,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
             ),
             if (searchingArtists) const LinearProgressIndicator(),
 
-            // Resultados de artistas con país abajo
+            // Resultados artistas con País abajo
             if (artistResults.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
@@ -296,6 +292,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
                   final c = (a.country ?? '').trim();
+
                   return ListTile(
                     title: Text(a.name),
                     subtitle: c.isEmpty ? null : Text('País: $c'),
@@ -339,16 +336,16 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             ),
                             title: Text(al.title),
 
-                            // Año + botones a la derecha
+                            // Año + 3 iconos a la derecha
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // 📚 Agregar (mismo icono de "Lista de vinilos")
+                                    // ✅ AGREGAR: mismo icono que "Lista de vinilos"
                                     _miniBtn(
-                                      icon: exists ? Icons.check_circle : Icons.library_music,
+                                      icon: exists ? Icons.check_circle : Icons.format_list_bulleted,
                                       active: exists,
                                       tooltip: exists ? 'Ya está en tu lista' : 'Agregar a tu lista',
                                       onPressed: (busy || exists)
@@ -364,7 +361,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
 
-                                    // 🛒 Lista de deseos (carrito)
+                                    // 🛒 Lista de deseos
                                     _miniBtn(
                                       icon: Icons.shopping_cart,
                                       active: inWish,
