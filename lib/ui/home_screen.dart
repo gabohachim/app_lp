@@ -23,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final Map<int, bool> _favCache = {}; // ⭐ cache local para favorito instantáneo
   Vista vista = Vista.inicio;
 
   bool _gridView = false;
@@ -149,12 +150,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final id = v['id'];
     if (id is! int) return;
 
-    final current = (v['favorite'] ?? 0) == 1;
+    final dbFav = (v['favorite'] ?? 0) == 1;
+    final current = _favCache[id] ?? dbFav;
     final next = !current;
 
-    // ✅ OPTIMISTA: cambia el icono inmediatamente
-    if (!mounted) return;
+    // ✅ OPTIMISTA: cambia el icono al instante (cache + mapa)
     setState(() {
+      _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
     });
 
@@ -162,9 +164,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await VinylDb.instance.setFavorite(id: id, favorite: next);
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
-      // ❌ revertimos si falla
       if (!mounted) return;
+      // ❌ revertimos si falla
       setState(() {
+        _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
       });
 
@@ -243,7 +246,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final year = (v['year'] as String?)?.trim() ?? '';
     final artista = (v['artista'] as String?)?.trim() ?? '';
     final album = (v['album'] as String?)?.trim() ?? '';
-    final fav = (v['favorite'] ?? 0) == 1;
+    final id = v['id'];
+            final dbFav = (v['favorite'] ?? 0) == 1;
+            final fav = (id is int) ? (_favCache[id] ?? dbFav) : dbFav;
 
     return InkWell(
       onTap: () => _openDetail(v),
@@ -883,15 +888,7 @@ class _HomeScreenState extends State<HomeScreen> {
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-
-        final rawItems = snap.data!;
-
-        // ✅ Filtra en memoria según estado ACTUAL (optimista).
-        // En "Vinilos favoritos", si desmarcas ⭐, desaparece al tiro y en GRID no quedan huecos.
-        final items = onlyFavorites
-            ? rawItems.where((v) => (v['favorite'] ?? 0) == 1).toList()
-            : rawItems;
-
+        final items = snap.data!;
         if (items.isEmpty) {
           return Text(
             onlyFavorites ? 'No tienes favoritos todavía.' : 'No tienes vinilos todavía.',
@@ -924,12 +921,16 @@ class _HomeScreenState extends State<HomeScreen> {
             final year = (v['year'] as String?)?.trim() ?? '—';
             final genre = (v['genre'] as String?)?.trim();
             final country = (v['country'] as String?)?.trim();
-            final fav = (v['favorite'] ?? 0) == 1;
+            final id = v['id'];
+            final dbFav = (v['favorite'] ?? 0) == 1;
+            final fav = (id is int) ? (_favCache[id] ?? dbFav) : dbFav;
 
             return Card(
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
+
+                // número como badge + texto artista/album (sin "LP")
                 title: Stack(
                   children: [
                     Padding(
@@ -943,10 +944,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
                   ],
                 ),
+
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
                 onTap: () => _openDetail(v),
+
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
