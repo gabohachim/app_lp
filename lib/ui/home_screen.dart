@@ -12,8 +12,6 @@ import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
 import 'wishlist_screen.dart';
-import 'scanner_screen.dart';
-
 enum Vista { inicio, buscar, lista, favoritos, borrar }
 
 class HomeScreen extends StatefulWidget {
@@ -152,17 +150,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
+
     final current = (v['favorite'] ?? 0) == 1;
     final next = !current;
 
-    await VinylDb.instance.setFavorite(id: id, favorite: next);
-    await BackupService.autoSaveIfEnabled();
+    // ✅ OPTIMISTA: cambia al tiro el icono
+    setState(() {
+      v['favorite'] = next ? 1 : 0;
+    });
 
-    // actualiza mapa local para que el icono cambie al tiro
-    v['favorite'] = next ? 1 : 0;
+    try {
+      await VinylDb.instance.setFavorite(id: id, favorite: next);
+      await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      // ❌ revertimos si falla
+      if (!mounted) return;
+      setState(() {
+        v['favorite'] = current ? 1 : 0;
+      });
 
-    if (!mounted) return;
-    setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error actualizando favorito.')),
+      );
+    }
   }
 
   void _openDetail(Map<String, dynamic> v) {
@@ -561,93 +571,90 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget botonesInicio() {
-  Widget btn(IconData icon, String text, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.black),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+    Widget btn(IconData icon, String id, String text, VoidCallback onTap) {
+      final active = _homeActive == id;
+
+      return InkWell(
+        onTap: () {
+          // ✅ color instantáneo al tocar
+          setState(() => _homeActive = id);
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: active ? Colors.grey : Colors.black),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
-            ),
-            const Icon(Icons.chevron_right),
-          ],
+              const Icon(Icons.chevron_right),
+            ],
+          ),
         ),
-      ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        btn(Icons.search, 'buscar', 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
+        const SizedBox(height: 10),
+
+        btn(Icons.qr_code_scanner, 'scanner', 'Scanner', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())).then((_) {
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        btn(Icons.library_music, 'discografias', 'Discografías', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen())).then((_) {
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        // 📚 Lista de vinilos (icono de líneas)
+        btn(Icons.library_music, 'lista', 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        const SizedBox(height: 10),
+
+        btn(Icons.star, 'favoritos', 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
+        const SizedBox(height: 10),
+
+        // 🛒 Lista de deseos (carrito)
+        btn(Icons.shopping_cart, 'wishlist', 'Lista de deseos', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        btn(Icons.settings, 'ajustes', 'Ajustes', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
+            await _loadViewMode();
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        btn(Icons.delete_outline, 'borrar', 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
+      ],
     );
   }
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      btn(Icons.search, 'Buscar vinilos', () {
-        setState(() => vista = Vista.buscar);
-      }),
-      const SizedBox(height: 10),
-
-      btn(Icons.library_music, 'Discografías', () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const DiscographyScreen()),
-        );
-      }),
-      const SizedBox(height: 10),
-
-      // 📚 Lista de vinilos (líneas, mismo icono que Agregar en Discografías)
-      btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
-        setState(() => vista = Vista.lista);
-      }),
-      const SizedBox(height: 10),
-
-      btn(Icons.star, 'Vinilos favoritos', () {
-        setState(() => vista = Vista.favoritos);
-      }),
-      const SizedBox(height: 10),
-
-      // 🛒 Lista de deseos (carrito, mismo que Discografías)
-      btn(Icons.shopping_cart, 'Lista de deseos', () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => WishlistScreen()),
-        ).then((_) {
-          if (!mounted) return;
-          setState(() {});
-        });
-      }),
-      const SizedBox(height: 10),
-
-      btn(Icons.settings, 'Ajustes', () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SettingsScreen()),
-        ).then((_) async {
-          await _loadViewMode();
-          if (!mounted) return;
-          setState(() {});
-        });
-      }),
-      const SizedBox(height: 10),
-
-      btn(Icons.delete_outline, 'Borrar vinilos', () {
-        setState(() => vista = Vista.borrar);
-      }),
-    ],
-  );
-}
 
   Widget vistaBuscar() {
     final p = prepared;
@@ -898,7 +905,16 @@ class _HomeScreenState extends State<HomeScreen> {
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final items = snap.data!;
+
+        final rawItems = snap.data!;
+
+        // ✅ CLAVE: filtramos en memoria según el valor actual (optimista)
+        // Esto hace que en "Vinilos favoritos", al desmarcar ⭐, el item desaparezca INMEDIATO
+        // y en GRID no queden casillas vacías.
+        final items = onlyFavorites
+            ? rawItems.where((v) => (v['favorite'] ?? 0) == 1).toList()
+            : rawItems;
+
         if (items.isEmpty) {
           return Text(
             onlyFavorites ? 'No tienes favoritos todavía.' : 'No tienes vinilos todavía.',
