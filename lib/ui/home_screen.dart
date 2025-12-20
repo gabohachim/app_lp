@@ -610,8 +610,6 @@ class _HomeScreenState extends State<HomeScreen> {
         btn(Icons.search, 'buscar', 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
 
-        btn(Icons.qr_code_scanner, 'scanner', 'Scanner', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())).then((_) {
             if (!mounted) return;
             setState(() => _homeActive = null);
           });
