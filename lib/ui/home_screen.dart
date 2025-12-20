@@ -310,12 +310,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (lo dejamos arriba derecha)
+            // 🗑️ borrar (abajo derecha, pegado a la esquina)
             if (conBorrar)
               Positioned(
-                left: 2,
+                right: 2,
                 bottom: 2,
-                child: IconButton(
+child: IconButton(
                   icon: const Icon(Icons.delete),
                   onPressed: () async {
                     await VinylDb.instance.deleteById(v['id'] as int);
