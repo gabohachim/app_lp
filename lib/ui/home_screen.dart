@@ -183,34 +183,6 @@ class _HomeScreenState extends State<HomeScreen> {
         const SnackBar(content: Text('Error actualizando favorito.')),
       );
     }
-  });
-
-    try {
-      await VinylDb.instance.setFavorite(id: id, favorite: next);
-      await BackupService.autoSaveIfEnabled();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _favCache[id] = current;
-        v['favorite'] = current ? 1 : 0;
-        _reloadTick++;
-      });
-    }
-  });
-
-    try {
-      await VinylDb.instance.setFavorite(id: id, favorite: next);
-      await BackupService.autoSaveIfEnabled();
-    } catch (_) {
-      if (!mounted) return;
-      // revert
-      setState(() {
-        _favCache[id] = current;
-        v['favorite'] = current ? 1 : 0;
-        _reloadTick++;
-      });
-      snack('Error actualizando favorito.');
-    }
   }
 
   void _openDetail(Map<String, dynamic> v) {
