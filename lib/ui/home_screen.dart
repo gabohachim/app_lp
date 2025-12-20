@@ -12,6 +12,7 @@ import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
 import 'wishlist_screen.dart';
+import 'scanner_screen.dart';
 
 enum Vista { inicio, buscar, lista, favoritos, borrar }
 
@@ -24,6 +25,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Vista vista = Vista.inicio;
+
+  // Estado visual para iconos del Home (cambia a gris al tocar)
+  String? _homeActive;
 
   bool _gridView = false;
 
@@ -287,11 +291,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (abajo derecha, bien a la derecha)
+            // 🗑️ borrar (abajo derecha, bien pegada a la derecha)
             if (conBorrar)
               Positioned(
-                right: 2,
-                bottom: 2,
+                right: 0,
+                bottom: 0,
                 child: IconButton(
                   icon: const Icon(Icons.delete),
                   padding: EdgeInsets.zero,
@@ -557,9 +561,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget botonesInicio() {
-    Widget btn(IconData icon, String text, VoidCallback onTap) {
+    Widget btn(IconData icon, String id, String text, VoidCallback onTap) {
+      final active = _homeActive == id;
+
       return InkWell(
-        onTap: onTap,
+        onTap: () {
+          // ✅ color instantáneo al tocar
+          setState(() => _homeActive = id);
+          onTap();
+        },
         borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
@@ -569,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Row(
             children: [
-              Icon(icon),
+              Icon(icon, color: active ? Colors.grey : Colors.black),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -587,39 +597,51 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        btn(Icons.search, 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
-        const SizedBox(height: 10),
-        btn(Icons.library_music, 'Discografías', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
-        }),
+        btn(Icons.search, 'buscar', 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
 
-        // ✅ sin "Mostrar"
-        btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
-        const SizedBox(height: 10),
-
-        btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
-        const SizedBox(height: 10),
-
-        // ✅ Lista de deseos (debajo de favoritos)
-        btn(Icons.bookmark_border, 'Lista de deseos', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
+        btn(Icons.qr_code_scanner, 'scanner', 'Scanner', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen())).then((_) {
             if (!mounted) return;
-            setState(() {});
+            setState(() => _homeActive = null);
           });
         }),
         const SizedBox(height: 10),
 
-        btn(Icons.settings, 'Ajustes', () {
+        btn(Icons.library_music, 'discografias', 'Discografías', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen())).then((_) {
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        // 📚 Lista de vinilos (icono de líneas)
+        btn(Icons.library_music, 'lista', 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        const SizedBox(height: 10),
+
+        btn(Icons.star, 'favoritos', 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
+        const SizedBox(height: 10),
+
+        // 🛒 Lista de deseos (carrito)
+        btn(Icons.shopping_cart, 'wishlist', 'Lista de deseos', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
+            if (!mounted) return;
+            setState(() => _homeActive = null);
+          });
+        }),
+        const SizedBox(height: 10),
+
+        btn(Icons.settings, 'ajustes', 'Ajustes', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
             if (!mounted) return;
-            setState(() {});
+            setState(() => _homeActive = null);
           });
         }),
         const SizedBox(height: 10),
 
-        btn(Icons.delete_outline, 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
+        btn(Icons.delete_outline, 'borrar', 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
       ],
     );
   }
@@ -981,7 +1003,7 @@ class _HomeScreenState extends State<HomeScreen> {
       title: Text(title),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
-        onPressed: () => setState(() => vista = Vista.inicio),
+        onPressed: () => setState(() { vista = Vista.inicio; _homeActive = null; }),
       ),
     );
   }
@@ -989,7 +1011,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget? _buildFab() {
     if (vista == Vista.lista || vista == Vista.favoritos || vista == Vista.borrar) {
       return FloatingActionButton.extended(
-        onPressed: () => setState(() => vista = Vista.inicio),
+        onPressed: () => setState(() { vista = Vista.inicio; _homeActive = null; }),
         icon: const Icon(Icons.home),
         label: const Text('Inicio'),
       );
