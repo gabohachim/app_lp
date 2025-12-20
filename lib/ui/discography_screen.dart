@@ -287,9 +287,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                   return ListTile(
                     dense: true,
                     title: Text(a.name),
-                    subtitle: ((a.country ?? '').trim().isEmpty)
-                        ? null
-                        : Text('País: ${(a.country ?? '').trim()}'),
+                    subtitle: ((a.country ?? '').trim().isEmpty) ? null : Text('País: ${(a.country ?? '').trim()}'),
                     onTap: () => _pickArtist(a),
                   );
                 },
@@ -307,7 +305,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         final year = al.year ?? '—';
                         final key = _k(artistName, al.title);
 
-                        // si no está cargado el estado, lo hidratamos (una vez)
                         if (!_exists.containsKey(key) && _busy[key] != true && artistName.isNotEmpty) {
                           _hydrateIfNeeded(artistName, al);
                         }
@@ -331,22 +328,20 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             ),
                             title: Text(al.title),
 
-                            // ✅ SUBTITLE con Año a la izquierda + 3 iconos abajo a la derecha
+                            // Año izquierda + botones derecha (misma altura)
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
-
-                                // iconos bien a la derecha
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // 1) ➕ Agregar
+                                    // ✅ Agregar (mismo icono que “Lista de vinilos”)
                                     IconButton(
                                       iconSize: 20,
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                                       icon: Icon(
-                                        Icons.add_circle_outline,
+                                        Icons.format_list_bulleted,
                                         color: exists ? Colors.black26 : Colors.black,
                                       ),
                                       tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
@@ -355,7 +350,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                           : () => _addAlbumOptimistic(artistName, al, favorite: false),
                                     ),
 
-                                    // 2) ⭐ Favoritos
+                                    // ⭐ Favoritos
                                     IconButton(
                                       iconSize: 20,
                                       padding: EdgeInsets.zero,
@@ -365,7 +360,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
 
-                                    // 3) 🛒 Lista de deseos
+                                    // ✅ Wishlist (carrito)
                                     IconButton(
                                       iconSize: 20,
                                       padding: EdgeInsets.zero,
