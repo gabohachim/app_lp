@@ -161,15 +161,24 @@ class _HomeScreenState extends State<HomeScreen> {
     final id = v['id'];
     if (id is! int) return;
 
-    final dbFav = _isFav(v);
-    final current = _favCache[id] ?? dbFav;
+    final current = (v['favorite'] ?? 0) == 1;
     final next = !current;
 
+    // UI inmediata
     setState(() {
-      _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
-      _reloadTick++;
     });
+
+    try {
+      await VinylDb.instance.setFavorite(id: id, favorite: next);
+      await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        v['favorite'] = current ? 1 : 0;
+      });
+    }
+  });
 
     try {
       await VinylDb.instance.setFavorite(id: id, favorite: next);
