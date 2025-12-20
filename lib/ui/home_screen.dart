@@ -561,90 +561,93 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget botonesInicio() {
-    Widget btn(IconData icon, String id, String text, VoidCallback onTap) {
-      final active = _homeActive == id;
-
-      return InkWell(
-        onTap: () {
-          // ✅ color instantáneo al tocar
-          setState(() => _homeActive = id);
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: active ? Colors.grey : Colors.black),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  text,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+  Widget btn(IconData icon, String text, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.black),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
         ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        btn(Icons.search, 'buscar', 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
-        const SizedBox(height: 10),
-
-        btn(Icons.qr_code_scanner, 'scanner', 'Scanner', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => ScannerScreen())).then((_) {
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
-        }),
-        const SizedBox(height: 10),
-
-        btn(Icons.library_music, 'discografias', 'Discografías', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen())).then((_) {
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
-        }),
-        const SizedBox(height: 10),
-
-        // 📚 Lista de vinilos (icono de líneas)
-        btn(Icons.library_music, 'lista', 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
-        const SizedBox(height: 10),
-
-        btn(Icons.star, 'favoritos', 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
-        const SizedBox(height: 10),
-
-        // 🛒 Lista de deseos (carrito)
-        btn(Icons.shopping_cart, 'wishlist', 'Lista de deseos', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
-        }),
-        const SizedBox(height: 10),
-
-        btn(Icons.settings, 'ajustes', 'Ajustes', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
-            await _loadViewMode();
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
-        }),
-        const SizedBox(height: 10),
-
-        btn(Icons.delete_outline, 'borrar', 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
-      ],
+      ),
     );
   }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      btn(Icons.search, 'Buscar vinilos', () {
+        setState(() => vista = Vista.buscar);
+      }),
+      const SizedBox(height: 10),
+
+      btn(Icons.library_music, 'Discografías', () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DiscographyScreen()),
+        );
+      }),
+      const SizedBox(height: 10),
+
+      // 📚 Lista de vinilos (líneas, mismo icono que Agregar en Discografías)
+      btn(Icons.library_music, 'Lista de vinilos', () {
+        setState(() => vista = Vista.lista);
+      }),
+      const SizedBox(height: 10),
+
+      btn(Icons.star, 'Vinilos favoritos', () {
+        setState(() => vista = Vista.favoritos);
+      }),
+      const SizedBox(height: 10),
+
+      // 🛒 Lista de deseos (carrito, mismo que Discografías)
+      btn(Icons.shopping_cart, 'Lista de deseos', () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => WishlistScreen()),
+        ).then((_) {
+          if (!mounted) return;
+          setState(() {});
+        });
+      }),
+      const SizedBox(height: 10),
+
+      btn(Icons.settings, 'Ajustes', () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        ).then((_) async {
+          await _loadViewMode();
+          if (!mounted) return;
+          setState(() {});
+        });
+      }),
+      const SizedBox(height: 10),
+
+      btn(Icons.delete_outline, 'Borrar vinilos', () {
+        setState(() => vista = Vista.borrar);
+      }),
+    ],
+  );
+}
 
   Widget vistaBuscar() {
     final p = prepared;
