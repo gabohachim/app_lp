@@ -285,7 +285,11 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
                   return ListTile(
+                    dense: true,
                     title: Text(a.name),
+                    subtitle: ((a.country ?? '').trim().isEmpty)
+                        ? null
+                        : Text('País: ${(a.country ?? '').trim()}'),
                     onTap: () => _pickArtist(a),
                   );
                 },
