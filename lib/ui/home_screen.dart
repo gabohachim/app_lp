@@ -23,7 +23,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final Map<int, bool> _favCache = {}; // ⭐ cache local para favorito instantáneo
+  // ⭐ Cache local para favoritos (cambio instantáneo en lista y en favoritos)
+  final Map<int, bool> _favCache = {};
+  int _reloadTick = 0; // fuerza recargas de FutureBuilder
+
   Vista vista = Vista.inicio;
 
   bool _gridView = false;
@@ -154,10 +157,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final current = _favCache[id] ?? dbFav;
     final next = !current;
 
-    // ✅ OPTIMISTA: cambia el icono al instante (cache + mapa)
+    // ✅ Optimista: cambia al instante (lista y favoritos)
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
+      _reloadTick++; // fuerza que FutureBuilder vuelva a consultar DB cuando cambias de vista
     });
 
     try {
@@ -165,10 +169,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // ❌ revertimos si falla
+      // ❌ revert
       setState(() {
         _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
+        _reloadTick++;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -610,14 +615,14 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 10),
 
         // ✅ sin "Mostrar"
-        btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
 
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
         // ✅ NUEVO: Lista de deseos (debajo de favoritos)
-        btn(Icons.shopping_cart, 'Lista de deseos', () {
+        btn(Icons.bookmark_border, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
             setState(() {});
@@ -885,10 +890,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final fut = onlyFavorites ? VinylDb.instance.getFavorites() : VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey('listaCompleta_${onlyFavorites}_$conBorrar' + _reloadTick.toString()),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final items = snap.data!;
+        final rawItems = snap.data!;
+        // ✅ Si estamos en favoritos, filtramos usando cache local si existe
+        final items = onlyFavorites
+            ? rawItems.where((v) {
+                final id = v['id'];
+                if (id is! int) return false;
+                final dbFav = (v['favorite'] ?? 0) == 1;
+                final fav = _favCache[id] ?? dbFav;
+                return fav;
+              }).toList()
+            : rawItems;
         if (items.isEmpty) {
           return Text(
             onlyFavorites ? 'No tienes favoritos todavía.' : 'No tienes vinilos todavía.',
