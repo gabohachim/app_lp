@@ -151,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isFav(Map<String, dynamic> v) {
     final id = v['id'];
-    final dbFav = _isFav(v);
+    final dbFav = (v['favorite'] ?? 0) == 1;
     if (id is int) return _favCache[id] ?? dbFav;
     return dbFav;
   }
@@ -161,27 +161,28 @@ class _HomeScreenState extends State<HomeScreen> {
     final id = v['id'];
     if (id is! int) return;
 
-    final current = (v['favorite'] ?? 0) == 1;
+    final current = _isFav(v);
     final next = !current;
 
-    // ✅ UI inmediata
+    // ✅ Optimista: cambia al tiro
     setState(() {
+      _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
+      _reloadTick++;
     });
 
-    // ✅ Guardar en DB
     try {
       await VinylDb.instance.setFavorite(id: id, favorite: next);
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      // revertir si falla
+      // revert
       setState(() {
+        _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
+        _reloadTick++;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error actualizando favorito.')),
-      );
+      snack('Error actualizando favorito.');
     }
   }
 
