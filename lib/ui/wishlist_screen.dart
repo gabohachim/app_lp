@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../db/vinyl_db.dart';
 import '../services/backup_service.dart';
 import '../services/vinyl_add_service.dart';
+import '../services/discography_service.dart';
+import 'vinyl_detail_sheet.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -114,6 +116,50 @@ class _WishlistScreenState extends State<WishlistScreen> {
     }
   }
 
+  Future<void> _openDetail(Map<String, dynamic> w) async {
+    final artist = (w['artista'] as String?)?.trim() ?? '';
+    final album = (w['album'] as String?)?.trim() ?? '';
+    final year = (w['year'] as String?)?.trim() ?? '';
+    final cover = (w['cover500'] as String?)?.trim().isNotEmpty == true
+        ? (w['cover500'] as String).trim()
+        : ((w['cover250'] as String?)?.trim() ?? '');
+    final artistId = (w['artistId'] as String?)?.trim() ?? '';
+
+    String country = '';
+    String genre = '';
+    String bio = '';
+
+    // Traemos info del artista (país / tags / bio) si tenemos artistId
+    if (artistId.isNotEmpty) {
+      try {
+        final info = await DiscographyService.getArtistInfoById(artistId, artistName: artist);
+        country = (info.country ?? '').trim();
+        genre = info.genres.isNotEmpty ? info.genres.join(', ') : '';
+        bio = (info.bio ?? '').trim();
+      } catch (_) {}
+    }
+
+    final vinylLike = <String, dynamic>{
+      'mbid': '', // wishlist no tiene release-group id -> solo muestra info (sin tracks)
+      'coverPath': cover, // URL o archivo (el sheet soporta ambos)
+      'artista': artist,
+      'album': album,
+      'year': year,
+      'genre': genre,
+      'country': country,
+      'artistBio': bio,
+    };
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VinylDetailSheet(vinyl: vinylLike),
+    );
+  }
+
   Widget _placeholder() {
     return Container(
       width: 56,
@@ -191,6 +237,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
               return Card(
                 child: ListTile(
+                  onTap: () => _openDetail(w),
                   leading: _leadingCover(w),
                   title: Text('${w['artista']} — ${w['album']}'),
                   subtitle: Text('Año: ${(w['year'] as String?)?.trim().isNotEmpty == true ? w['year'] : '—'}'),
