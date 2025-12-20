@@ -12,6 +12,7 @@ import 'discography_screen.dart';
 import 'settings_screen.dart';
 import 'vinyl_detail_sheet.dart';
 import 'wishlist_screen.dart';
+
 enum Vista { inicio, buscar, lista, favoritos, borrar }
 
 class HomeScreen extends StatefulWidget {
@@ -23,9 +24,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Vista vista = Vista.inicio;
-
-  // Estado visual para iconos del Home (cambia a gris al tocar)
-  String? _homeActive;
 
   bool _gridView = false;
 
@@ -154,7 +152,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final current = (v['favorite'] ?? 0) == 1;
     final next = !current;
 
-    // ✅ OPTIMISTA: cambia al tiro el icono
+    // ✅ OPTIMISTA: cambia el icono inmediatamente
+    if (!mounted) return;
     setState(() {
       v['favorite'] = next ? 1 : 0;
     });
@@ -301,16 +300,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (abajo derecha, bien pegada a la derecha)
+            // 🗑️ borrar (lo dejamos arriba derecha)
             if (conBorrar)
               Positioned(
-                right: 0,
-                bottom: 0,
+                left: 2,
+                bottom: 2,
                 child: IconButton(
                   icon: const Icon(Icons.delete),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                  splashRadius: 20,
                   onPressed: () async {
                     await VinylDb.instance.deleteById(v['id'] as int);
                     await BackupService.autoSaveIfEnabled();
@@ -571,15 +567,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget botonesInicio() {
-    Widget btn(IconData icon, String id, String text, VoidCallback onTap) {
-      final active = _homeActive == id;
-
+    Widget btn(IconData icon, String text, VoidCallback onTap) {
       return InkWell(
-        onTap: () {
-          // ✅ color instantáneo al tocar
-          setState(() => _homeActive = id);
-          onTap();
-        },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
@@ -589,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Row(
             children: [
-              Icon(icon, color: active ? Colors.grey : Colors.black),
+              Icon(icon),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -607,49 +597,39 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        btn(Icons.search, 'buscar', 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
+        btn(Icons.search, 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
-
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
+        btn(Icons.library_music, 'Discografías', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
         }),
         const SizedBox(height: 10),
 
-        btn(Icons.library_music, 'discografias', 'Discografías', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen())).then((_) {
-            if (!mounted) return;
-            setState(() => _homeActive = null);
-          });
-        }),
+        // ✅ sin "Mostrar"
+        btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
 
-        // 📚 Lista de vinilos (icono de líneas)
-        btn(Icons.library_music, 'lista', 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
-        btn(Icons.star, 'favoritos', 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
-        const SizedBox(height: 10),
-
-        // 🛒 Lista de deseos (carrito)
-        btn(Icons.shopping_cart, 'wishlist', 'Lista de deseos', () {
+        // ✅ NUEVO: Lista de deseos (debajo de favoritos)
+        btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
-            setState(() => _homeActive = null);
+            setState(() {});
           });
         }),
         const SizedBox(height: 10),
 
-        btn(Icons.settings, 'ajustes', 'Ajustes', () {
+        btn(Icons.settings, 'Ajustes', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
             if (!mounted) return;
-            setState(() => _homeActive = null);
+            setState(() {});
           });
         }),
         const SizedBox(height: 10),
 
-        btn(Icons.delete_outline, 'borrar', 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
+        btn(Icons.delete_outline, 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
       ],
     );
   }
@@ -906,9 +886,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final rawItems = snap.data!;
 
-        // ✅ CLAVE: filtramos en memoria según el valor actual (optimista)
-        // Esto hace que en "Vinilos favoritos", al desmarcar ⭐, el item desaparezca INMEDIATO
-        // y en GRID no queden casillas vacías.
+        // ✅ Filtra en memoria según estado ACTUAL (optimista).
+        // En "Vinilos favoritos", si desmarcas ⭐, desaparece al tiro y en GRID no quedan huecos.
         final items = onlyFavorites
             ? rawItems.where((v) => (v['favorite'] ?? 0) == 1).toList()
             : rawItems;
@@ -951,8 +930,6 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
-
-                // número como badge + texto artista/album (sin "LP")
                 title: Stack(
                   children: [
                     Padding(
@@ -966,12 +943,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
                   ],
                 ),
-
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
                 onTap: () => _openDetail(v),
-
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
@@ -1020,7 +995,7 @@ class _HomeScreenState extends State<HomeScreen> {
       title: Text(title),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
-        onPressed: () => setState(() { vista = Vista.inicio; _homeActive = null; }),
+        onPressed: () => setState(() => vista = Vista.inicio),
       ),
     );
   }
@@ -1028,7 +1003,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget? _buildFab() {
     if (vista == Vista.lista || vista == Vista.favoritos || vista == Vista.borrar) {
       return FloatingActionButton.extended(
-        onPressed: () => setState(() { vista = Vista.inicio; _homeActive = null; }),
+        onPressed: () => setState(() => vista = Vista.inicio),
         icon: const Icon(Icons.home),
         label: const Text('Inicio'),
       );
