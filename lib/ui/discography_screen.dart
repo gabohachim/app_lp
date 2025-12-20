@@ -25,7 +25,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   ArtistHit? pickedArtist;
   List<AlbumItem> albums = [];
 
-  // estado optimista
+  // Estado optimista (cambio inmediato de iconos)
   final Map<String, bool> _exists = {};
   final Map<String, bool> _fav = {};
   final Map<String, int?> _vinylId = {};
@@ -40,10 +40,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     artistCtrl.dispose();
     super.dispose();
   }
-
-  // --------------------------------------------------
-  // BUSCAR ARTISTA
-  // --------------------------------------------------
 
   void _onArtistTextChanged(String value) {
     _debounce?.cancel();
@@ -78,6 +74,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       albums = [];
       loadingAlbums = true;
 
+      // limpiar caches al cambiar artista
       _exists.clear();
       _fav.clear();
       _vinylId.clear();
@@ -93,10 +90,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       loadingAlbums = false;
     });
   }
-
-  // --------------------------------------------------
-  // HIDRATAR ESTADO
-  // --------------------------------------------------
 
   Future<void> _hydrateIfNeeded(String artistName, AlbumItem al) async {
     final key = _k(artistName, al.title);
@@ -122,14 +115,11 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     }
   }
 
-  // --------------------------------------------------
-  // ACCIONES
-  // --------------------------------------------------
-
   Future<void> _addAlbumOptimistic(String artistName, AlbumItem al, {required bool favorite}) async {
     final key = _k(artistName, al.title);
     if (_busy[key] == true) return;
 
+    // ✅ Optimista: cambia UI al tiro
     setState(() {
       _busy[key] = true;
       _exists[key] = true;
@@ -146,15 +136,40 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       final res = await VinylAddService.addPrepared(prepared, favorite: favorite);
       await BackupService.autoSaveIfEnabled();
 
-      if (!res.ok && mounted) {
+      if (!mounted) return;
+
+      if (!res.ok) {
+        // revert
         setState(() {
           _exists.remove(key);
-          _fav.remove(key);
           _vinylId.remove(key);
+          _fav.remove(key);
+        });
+      } else {
+        // refrescar id real
+        final row = await VinylDb.instance.findByExact(artista: artistName, album: al.title);
+        if (!mounted) return;
+        setState(() {
+          _vinylId[key] = row?['id'] as int?;
+          _exists[key] = row != null;
+          _fav[key] = row != null ? ((row['favorite'] ?? 0) == 1) : favorite;
         });
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _exists.remove(key);
+        _vinylId.remove(key);
+        _fav.remove(key);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error guardando. Intenta de nuevo.')),
+      );
     } finally {
-      if (mounted) setState(() => _busy[key] = false);
+      if (!mounted) return;
+      setState(() => _busy[key] = false);
     }
   }
 
@@ -170,19 +185,29 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       return;
     }
 
+    final id = _vinylId[key];
+    if (id == null) {
+      await _hydrateIfNeeded(artistName, al);
+      return;
+    }
+
     setState(() {
       _busy[key] = true;
       _fav[key] = !currentFav;
     });
 
     try {
-      final id = _vinylId[key];
-      if (id != null) {
-        await VinylDb.instance.setFavorite(id: id, favorite: !currentFav);
-        await BackupService.autoSaveIfEnabled();
-      }
+      await VinylDb.instance.setFavorite(id: id, favorite: !currentFav);
+      await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _fav[key] = currentFav);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error actualizando favorito.')),
+      );
     } finally {
-      if (mounted) setState(() => _busy[key] = false);
+      if (!mounted) return;
+      setState(() => _busy[key] = false);
     }
   }
 
@@ -214,21 +239,26 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
         );
       }
       await BackupService.autoSaveIfEnabled();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _wish[key] = inWish);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error actualizando lista deseos.')),
+      );
     } finally {
-      if (mounted) setState(() => _busy[key] = false);
+      if (!mounted) return;
+      setState(() => _busy[key] = false);
     }
   }
-
-  // --------------------------------------------------
-  // BOTÓN COMPACTO
-  // --------------------------------------------------
 
   IconButton _miniBtn({
     required IconData icon,
     required bool active,
+    required String tooltip,
     required VoidCallback? onPressed,
   }) {
     return IconButton(
+      tooltip: tooltip,
       icon: Icon(icon, color: active ? Colors.grey : Colors.black),
       iconSize: 20,
       padding: EdgeInsets.zero,
@@ -237,10 +267,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       onPressed: onPressed,
     );
   }
-
-  // --------------------------------------------------
-  // BUILD
-  // --------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +288,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
             ),
             if (searchingArtists) const LinearProgressIndicator(),
 
-            // ✅ Resultados artista: ahora muestra País debajo
+            // Resultados de artistas con país abajo
             if (artistResults.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
@@ -270,7 +296,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
                   final c = (a.country ?? '').trim();
-
                   return ListTile(
                     title: Text(a.name),
                     subtitle: c.isEmpty ? null : Text('País: $c'),
@@ -314,29 +339,36 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             ),
                             title: Text(al.title),
 
-                            // ✅ Año a la izquierda, botones alineados a la derecha
+                            // Año + botones a la derecha
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    // 📚 Agregar (mismo icono de "Lista de vinilos")
                                     _miniBtn(
-                                      icon: exists ? Icons.check_circle : Icons.add_circle_outline,
+                                      icon: exists ? Icons.check_circle : Icons.library_music,
                                       active: exists,
+                                      tooltip: exists ? 'Ya está en tu lista' : 'Agregar a tu lista',
                                       onPressed: (busy || exists)
                                           ? null
                                           : () => _addAlbumOptimistic(artistName, al, favorite: false),
                                     ),
+
+                                    // ⭐ Favoritos
                                     _miniBtn(
                                       icon: fav ? Icons.star : Icons.star_border,
                                       active: fav,
+                                      tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
                                       onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
-                                    // 🛒 siempre carrito de compra
+
+                                    // 🛒 Lista de deseos (carrito)
                                     _miniBtn(
                                       icon: Icons.shopping_cart,
                                       active: inWish,
+                                      tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
                                       onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
                                     ),
                                   ],
