@@ -25,7 +25,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   ArtistHit? pickedArtist;
   List<AlbumItem> albums = [];
 
-  // estado optimista
+  // Cache local: estado inmediato de iconos
   final Map<String, bool> _exists = {};
   final Map<String, bool> _fav = {};
   final Map<String, int?> _vinylId = {};
@@ -44,7 +44,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   void _onArtistTextChanged(String value) {
     _debounce?.cancel();
     final q = value.trim();
-
     if (q.isEmpty) {
       setState(() {
         artistResults = [];
@@ -74,6 +73,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       albums = [];
       loadingAlbums = true;
 
+      // limpia caches al cambiar artista
       _exists.clear();
       _fav.clear();
       _vinylId.clear();
@@ -82,6 +82,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     });
 
     final list = await DiscographyService.getDiscographyByArtistId(a.id);
+
     if (!mounted) return;
 
     setState(() {
@@ -114,24 +115,28 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     }
   }
 
-  Future<void> _addAlbumOptimistic(String artistName, AlbumItem al, {required bool favorite}) async {
+  Future<void> _addToListOptimistic(String artistName, AlbumItem al) async {
     final key = _k(artistName, al.title);
     if (_busy[key] == true) return;
 
+    // ✅ Optimista
     setState(() {
       _busy[key] = true;
       _exists[key] = true;
-      _fav[key] = favorite;
+      _fav[key] = _fav[key] == true;
+      _wish[key] = false; // si lo agrego a lista, sale de wishlist
     });
 
     try {
+      await VinylDb.instance.removeWishlistExact(artista: artistName, album: al.title);
+
       final prepared = await VinylAddService.prepare(
         artist: artistName,
         album: al.title,
         artistId: pickedArtist?.id,
       );
 
-      final res = await VinylAddService.addPrepared(prepared, favorite: favorite);
+      final res = await VinylAddService.addPrepared(prepared, favorite: false);
       await BackupService.autoSaveIfEnabled();
 
       if (!mounted) return;
@@ -140,7 +145,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
         setState(() {
           _exists.remove(key);
           _vinylId.remove(key);
-          _fav.remove(key);
         });
       } else {
         final row = await VinylDb.instance.findByExact(artista: artistName, album: al.title);
@@ -148,7 +152,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
         setState(() {
           _vinylId[key] = row?['id'] as int?;
           _exists[key] = row != null;
-          _fav[key] = row != null ? ((row['favorite'] ?? 0) == 1) : favorite;
+          _fav[key] = row != null ? ((row['favorite'] ?? 0) == 1) : (_fav[key] == true);
         });
       }
 
@@ -158,7 +162,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       setState(() {
         _exists.remove(key);
         _vinylId.remove(key);
-        _fav.remove(key);
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error guardando. Intenta de nuevo.')),
@@ -174,10 +177,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     if (_busy[key] == true) return;
 
     final exists = _exists[key] == true;
-    final currentFav = _fav[key] == true;
-
     if (!exists) {
-      await _addAlbumOptimistic(artistName, al, favorite: true);
+      // ✅ Regla: solo se puede favorito si ya está agregado
       return;
     }
 
@@ -186,6 +187,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
       await _hydrateIfNeeded(artistName, al);
       return;
     }
+
+    final currentFav = _fav[key] == true;
 
     setState(() {
       _busy[key] = true;
@@ -207,37 +210,33 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     }
   }
 
-  Future<void> _toggleWishlistOptimistic(String artistName, AlbumItem al) async {
+  Future<void> _addWishlistOptimistic(String artistName, AlbumItem al) async {
     final key = _k(artistName, al.title);
     if (_busy[key] == true) return;
 
+    final exists = _exists[key] == true;
     final inWish = _wish[key] == true;
+
+    if (exists || inWish) return;
 
     setState(() {
       _busy[key] = true;
-      _wish[key] = !inWish;
+      _wish[key] = true;
     });
 
     try {
-      if (!inWish) {
-        await VinylDb.instance.addToWishlist(
-          artista: artistName,
-          album: al.title,
-          year: al.year,
-          cover250: al.cover250,
-          cover500: al.cover500,
-          artistId: pickedArtist?.id,
-        );
-      } else {
-        await VinylDb.instance.removeWishlistExact(
-          artista: artistName,
-          album: al.title,
-        );
-      }
+      await VinylDb.instance.addToWishlist(
+        artista: artistName,
+        album: al.title,
+        year: al.year,
+        cover250: al.cover250,
+        cover500: al.cover500,
+        artistId: pickedArtist?.id,
+      );
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
-      setState(() => _wish[key] = inWish);
+      setState(() => _wish[key] = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error actualizando lista deseos.')),
       );
@@ -250,17 +249,18 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
   IconButton _miniBtn({
     required IconData icon,
     required bool active,
+    required bool disabled,
     required String tooltip,
     required VoidCallback? onPressed,
   }) {
     return IconButton(
       tooltip: tooltip,
-      icon: Icon(icon, color: active ? Colors.grey : Colors.black),
+      icon: Icon(icon, color: (active || disabled) ? Colors.grey : Colors.black),
       iconSize: 20,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 34, height: 34),
       splashRadius: 18,
-      onPressed: onPressed,
+      onPressed: disabled ? null : onPressed,
     );
   }
 
@@ -284,7 +284,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
             ),
             if (searchingArtists) const LinearProgressIndicator(),
 
-            // Resultados artistas con País abajo
             if (artistResults.isNotEmpty)
               ListView.builder(
                 shrinkWrap: true,
@@ -292,7 +291,6 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
                   final c = (a.country ?? '').trim();
-
                   return ListTile(
                     title: Text(a.name),
                     subtitle: c.isEmpty ? null : Text('País: $c'),
@@ -322,6 +320,10 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                         final inWish = _wish[key] == true;
                         final busy = _busy[key] == true;
 
+                        final addDisabled = exists;
+                        final favDisabled = !exists; // ⭐ solo si ya está agregado
+                        final wishDisabled = exists || inWish;
+
                         return Card(
                           child: ListTile(
                             leading: ClipRRect(
@@ -335,44 +337,41 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                               ),
                             ),
                             title: Text(al.title),
-
-                            // Año + 3 iconos a la derecha
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // ✅ AGREGAR: mismo icono que "Lista de vinilos"
                                     _miniBtn(
                                       icon: exists ? Icons.check_circle : Icons.format_list_bulleted,
                                       active: exists,
-                                      tooltip: exists ? 'Ya está en tu lista' : 'Agregar a tu lista',
-                                      onPressed: (busy || exists)
-                                          ? null
-                                          : () => _addAlbumOptimistic(artistName, al, favorite: false),
+                                      disabled: busy || addDisabled,
+                                      tooltip: addDisabled ? 'Ya está en tu lista' : 'Agregar a tu lista',
+                                      onPressed: () => _addToListOptimistic(artistName, al),
                                     ),
-
-                                    // ⭐ Favoritos
                                     _miniBtn(
                                       icon: fav ? Icons.star : Icons.star_border,
                                       active: fav,
-                                      tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                                      onPressed: busy ? null : () => _toggleFavoriteOptimistic(artistName, al),
+                                      disabled: busy || favDisabled,
+                                      tooltip: favDisabled
+                                          ? 'Primero agrégalo a tu lista'
+                                          : (fav ? 'Quitar de favoritos' : 'Agregar a favoritos'),
+                                      onPressed: () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
-
-                                    // 🛒 Lista de deseos
                                     _miniBtn(
                                       icon: Icons.shopping_cart,
                                       active: inWish,
-                                      tooltip: inWish ? 'Quitar de lista deseos' : 'Agregar a lista deseos',
-                                      onPressed: busy ? null : () => _toggleWishlistOptimistic(artistName, al),
+                                      disabled: busy || wishDisabled,
+                                      tooltip: exists
+                                          ? 'Ya lo tienes en tu lista'
+                                          : (inWish ? 'Ya está en lista de deseos' : 'Agregar a lista deseos'),
+                                      onPressed: () => _addWishlistOptimistic(artistName, al),
                                     ),
                                   ],
                                 ),
                               ],
                             ),
-
                             onTap: () {
                               Navigator.push(
                                 context,
