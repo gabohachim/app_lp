@@ -408,10 +408,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _debounceAlbum = Timer(const Duration(milliseconds: 220), () async {
       setState(() => buscandoAlbums = true);
-      final hits = await MetadataService.searchAlbumsForArtist(
-        artistName: artistName,
-        albumQuery: q,
-      );
+      // MetadataService.searchAlbumsForArtist usa parámetros POSICIONALES
+      // (artistName, albumQuery)
+      final hits = await MetadataService.searchAlbumsForArtist(artistName, q);
       if (!mounted) return;
       setState(() {
         sugerenciasAlbums = hits;

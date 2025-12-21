@@ -181,11 +181,8 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     final exists = _exists[key] == true;
     final currentFav = _fav[key] == true;
 
-    if (!exists) {
-      // si no existe, lo agregamos como favorito (optimista)
-      await _addAlbumOptimistic(artistName, al, favorite: true);
-      return;
-    }
+    // ✅ Regla: para ser favorito, el álbum debe estar agregado a tu lista
+    if (!exists) return;
 
     final id = _vinylId[key];
     if (id == null) {
@@ -220,35 +217,34 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     final key = _k(artistName, al.title);
     if (_busy[key] == true) return;
 
+    final exists = _exists[key] == true;
     final inWish = _wish[key] == true;
+
+    // ✅ Regla:
+    // - Si ya está en tu lista de vinilos => wishlist deshabilitada
+    // - Si ya está en wishlist => deshabilitada (sin opción de desmarcar desde discografías)
+    if (exists || inWish) return;
 
     // ✅ Optimista: cambia UI al tiro
     setState(() {
       _busy[key] = true;
-      _wish[key] = !inWish;
+      _wish[key] = true;
     });
 
     try {
-      if (!inWish) {
-        await VinylDb.instance.addToWishlist(
-          artista: artistName,
-          album: al.title,
-          year: al.year,
-          cover250: al.cover250,
-          cover500: al.cover500,
-          artistId: pickedArtist?.id,
-        );
-      } else {
-        await VinylDb.instance.removeWishlistExact(
-          artista: artistName,
-          album: al.title,
-        );
-      }
+      await VinylDb.instance.addToWishlist(
+        artista: artistName,
+        album: al.title,
+        year: al.year,
+        cover250: al.cover250,
+        cover500: al.cover500,
+        artistId: pickedArtist?.id,
+      );
       await BackupService.autoSaveIfEnabled();
     } catch (_) {
       if (!mounted) return;
       // revert
-      setState(() => _wish[key] = inWish);
+      setState(() => _wish[key] = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error actualizando lista deseos.')),
       );
@@ -285,8 +281,11 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                 itemBuilder: (_, i) {
                   final a = artistResults[i];
                   return ListTile(
+                    dense: true,
                     title: Text(a.name),
-                    subtitle: (a.country ?? '').trim().isEmpty ? null : Text((a.country ?? '').trim()),
+                    subtitle: ((a.country ?? '').trim().isEmpty)
+                        ? null
+                        : Text('País: ${(a.country ?? '').trim()}'),
                     onTap: () => _pickArtist(a),
                   );
                 },
@@ -328,20 +327,22 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                             ),
                             title: Text(al.title),
 
-                            // ✅ año + iconos alineados a la derecha (misma altura)
+                            // ✅ SUBTITLE con Año a la izquierda + 3 iconos abajo a la derecha
                             subtitle: Row(
                               children: [
                                 Expanded(child: Text('Año: $year')),
+
+                                // iconos bien a la derecha
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // 1) ➕ Agregar (icono lista)
+                                    // 1) ➕ Agregar
                                     IconButton(
                                       iconSize: 20,
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                                       icon: Icon(
-                                        Icons.list,
+                                        Icons.add_circle_outline,
                                         color: (exists || busy) ? Colors.grey : Colors.black,
                                       ),
                                       tooltip: exists ? 'Ya está en tu lista' : 'Agregar LP',
@@ -362,9 +363,7 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
                                       tooltip: !exists
                                           ? 'Agrega el álbum para marcar favorito'
                                           : (fav ? 'Quitar de favoritos' : 'Agregar a favoritos'),
-                                      onPressed: (busy || !exists)
-                                          ? null
-                                          : () => _toggleFavoriteOptimistic(artistName, al),
+                                      onPressed: (busy || !exists) ? null : () => _toggleFavoriteOptimistic(artistName, al),
                                     ),
 
                                     // 3) 🛒 Lista de deseos
