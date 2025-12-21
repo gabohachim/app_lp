@@ -91,10 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return dbFav;
   }
 
-  /// ✅ FIX PRINCIPAL:
-  /// - Marca/desmarca INSTANTÁNEO en UI
-  /// - Luego guarda en DB
-  /// - Si falla, revierte
+  /// ✅ Favorito instantáneo + guarda en DB
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
@@ -432,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 10),
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
-        // ✅ Lista de deseos con icono carrito (mismo que discografía)
+        // Lista de deseos con icono carrito (mismo que discografía)
         btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
@@ -820,7 +817,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           bottom: 2,
                           child: IconButton(
                             tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                            icon: Icon(fav ? Icons.star : Icons.star_border),
+                            // ✅ NEGRO/GRIS como Discografía
+                            icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                             onPressed: () => _toggleFavorite(v),
                           ),
                         ),
@@ -891,7 +889,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : IconButton(
                         tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                        icon: Icon(fav ? Icons.star : Icons.star_border),
+                        // ✅ NEGRO/GRIS como Discografía
+                        icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                         onPressed: () => _toggleFavorite(v),
                       ),
               ),
