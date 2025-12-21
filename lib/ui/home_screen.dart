@@ -269,7 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _debounceAlbum = Timer(const Duration(milliseconds: 250), () async {
       setState(() => buscandoAlbums = true);
+
+      // ✅ FIX: MetadataService.searchAlbumsForArtist usa posicionales
       final hits = await MetadataService.searchAlbumsForArtist(artistName, q);
+
       if (!mounted) return;
       setState(() {
         sugerenciasAlbums = hits;
@@ -429,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 10),
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
-        // Lista de deseos con icono carrito (mismo que discografía)
+        // ✅ Lista de deseos con icono carrito
         btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
@@ -644,7 +647,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => _openDetail(v),
                 trailing: IconButton(
                   tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                  icon: Icon(fav ? Icons.star : Icons.star_border),
+                  icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                   onPressed: () => _toggleFavorite(v),
                 ),
               ),
@@ -739,7 +742,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final fut = VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey('listaCompleta_' + onlyFavorites.toString() + '_' + conBorrar.toString() + '_' + _reloadTick.toString()),
+      key: ValueKey('listaCompleta_${onlyFavorites.toString()}_${conBorrar.toString()}_${_reloadTick.toString()}'),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
@@ -817,7 +820,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           bottom: 2,
                           child: IconButton(
                             tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                            // ✅ NEGRO/GRIS como Discografía
                             icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                             onPressed: () => _toggleFavorite(v),
                           ),
@@ -889,7 +891,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : IconButton(
                         tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                        // ✅ NEGRO/GRIS como Discografía
                         icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                         onPressed: () => _toggleFavorite(v),
                       ),
