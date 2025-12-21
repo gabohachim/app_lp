@@ -34,6 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<Map<String, int>>? _homeCountsFuture;
   Map<String, int> _homeCounts = const {'all': 0, 'fav': 0, 'wish': 0};
 
+  // ✅ Cache de la lista completa (evita recargar en cada setState y permite favorito instantáneo)
+  late Future<List<Map<String, dynamic>>> _futureAll;
+
   final artistaCtrl = TextEditingController();
   final albumCtrl = TextEditingController();
   final yearCtrl = TextEditingController();
@@ -130,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadViewMode();
     _refreshHomeCounts();
+    _futureAll = VinylDb.instance.getAll();
   }
 
   Future<void> _refreshHomeCounts() async {
@@ -156,7 +160,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadViewMode() async {
+  
+void _reloadAllData() {
+  setState(() {
+    _futureAll = VinylDb.instance.getAll();
+  });
+  _refreshHomeCounts();
+}
+
+Future<void> _loadViewMode() async {
     final g = await ViewModeService.isGridEnabled();
     if (!mounted) return;
     setState(() => _gridView = g);
@@ -192,10 +204,20 @@ class _HomeScreenState extends State<HomeScreen> {
     final current = _isFav(v);
     final next = !current;
 
+    // ✅ Badge de favoritos en Home (optimista)
+    final prevFavCount = _homeCounts['fav'] ?? 0;
+    final optimisticFavCount = next
+        ? (prevFavCount + 1)
+        : (prevFavCount > 0 ? prevFavCount - 1 : 0);
+
     // ✅ Optimista: cambia al tiro
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
+      _homeCounts = {
+        ..._homeCounts,
+        'fav': optimisticFavCount,
+      };
     });
 
     try {
@@ -207,6 +229,10 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
+        _homeCounts = {
+          ..._homeCounts,
+          'fav': prevFavCount,
+        };
       });
       snack('Error actualizando favorito.');
     }
@@ -336,20 +362,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Colors.grey : Colors.black),
                   onPressed: () => _toggleFavorite(v),
                 ),
-              ),
+                  ),
+                ),
 
             // 🗑️ borrar abajo derecha (bien a la esquina)
             if (conBorrar)
               Positioned(
-                right: 2,
-                bottom: 2,
+                right: 0,
+                bottom: 0,
                 child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+
                   icon: const Icon(Icons.delete),
                   onPressed: () async {
                     await VinylDb.instance.deleteById(v['id'] as int);
                     await BackupService.autoSaveIfEnabled();
                     snack('Borrado');
-                    setState(() {});
+                    _reloadAllData();
                   },
                 ),
               ),
@@ -630,20 +660,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (badge != null)
               Positioned(
-                right: 10,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '$badge',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                // ✅ mejor alineado: no tapa el chevron y queda en la línea del texto
+                right: 34,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$badge',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
@@ -957,7 +991,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget listaCompleta({required bool conBorrar, required bool onlyFavorites}) {
-    final fut = VinylDb.instance.getAll();
+    final fut = _futureAll;
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: fut,
@@ -1033,7 +1067,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           await VinylDb.instance.deleteById(v['id'] as int);
                           await BackupService.autoSaveIfEnabled();
                           snack('Borrado');
-                          setState(() {});
+                          _reloadAllData();
                         },
                       )
                     : IconButton(
