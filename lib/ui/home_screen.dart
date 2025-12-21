@@ -270,12 +270,23 @@ class _HomeScreenState extends State<HomeScreen> {
     _debounceAlbum = Timer(const Duration(milliseconds: 250), () async {
       setState(() => buscandoAlbums = true);
 
-      // ✅ FIX: MetadataService.searchAlbumsForArtist usa posicionales
-      final hits = await MetadataService.searchAlbumsForArtist(artistName, q);
+      // ✅ FIX REAL: searchAlbumsForArtist usa parámetros nombrados
+      final hits = await MetadataService.searchAlbumsForArtist(
+        artistName: artistName,
+        albumQuery: q,
+      );
 
       if (!mounted) return;
       setState(() {
-        sugerenciasAlbums = hits;
+        sugerenciasAlbums = hits
+            .map((a) => {
+                  'title': a.title,
+                  'year': a.year ?? '',
+                  'releaseGroupId': a.releaseGroupId,
+                  'cover250': a.cover250,
+                  'cover500': a.cover500,
+                })
+            .toList();
         buscandoAlbums = false;
       });
     });
