@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../db/vinyl_db.dart';
-import '../services/backup_service.dart';
 import '../services/discography_service.dart';
 import '../services/metadata_service.dart';
 import '../services/vinyl_add_service.dart';
+import '../services/backup_service.dart';
 import '../services/view_mode_service.dart';
 import 'discography_screen.dart';
 import 'settings_screen.dart';
@@ -91,14 +91,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return dbFav;
   }
 
+  /// ✅ FIX PRINCIPAL:
+  /// - Marca/desmarca INSTANTÁNEO en UI
+  /// - Luego guarda en DB
+  /// - Si falla, revierte
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
 
-    final current = (v['favorite'] ?? 0) == 1;
+    final current = _isFav(v);
     final next = !current;
 
-    // ✅ UI inmediata
+    // ✅ Optimista: cambia al tiro
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
@@ -420,19 +424,15 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         btn(Icons.search, 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
-
         btn(Icons.library_music, 'Discografías', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
         }),
         const SizedBox(height: 10),
-
         btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
-
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
-
-        // ✅ NUEVO: Lista de deseos (debajo de favoritos) -> ICONO CARRITO
+        // ✅ Lista de deseos con icono carrito (mismo que discografía)
         btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
@@ -440,7 +440,6 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         }),
         const SizedBox(height: 10),
-
         btn(Icons.settings, 'Ajustes', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) async {
             await _loadViewMode();
@@ -449,7 +448,6 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         }),
         const SizedBox(height: 10),
-
         btn(Icons.delete_outline, 'Borrar vinilos', () => setState(() => vista = Vista.borrar)),
       ],
     );
@@ -622,7 +620,6 @@ class _HomeScreenState extends State<HomeScreen> {
           label: const Text('Buscar'),
         ),
         const SizedBox(height: 10),
-
         if (resultados.isNotEmpty) ...[
           const Text('Resultados:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
@@ -657,7 +654,6 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }).toList(),
         ],
-
         if (mostrarAgregar) ...[
           const SizedBox(height: 12),
           Container(
@@ -746,11 +742,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final fut = VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey('listaCompleta_${onlyFavorites}_${conBorrar}_${_reloadTick.toString()}'),
+      key: ValueKey('listaCompleta_' + onlyFavorites.toString() + '_' + conBorrar.toString() + '_' + _reloadTick.toString()),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
         final rawItems = snap.data!;
+
+        // ✅ favoritos se filtran en vivo con _isFav (incluye cache instantáneo)
         final items = onlyFavorites ? rawItems.where((v) => _isFav(v)).toList() : rawItems;
 
         if (items.isEmpty) {
@@ -814,11 +812,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: _numeroBadge(v['numero']),
-                      ),
+                      Positioned(right: 8, top: 8, child: _numeroBadge(v['numero'])),
+
                       if (!conBorrar)
                         Positioned(
                           right: 2,
@@ -829,9 +824,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             onPressed: () => _toggleFavorite(v),
                           ),
                         ),
+
                       if (conBorrar)
                         Positioned(
-                          left: 2,
+                          right: 2,
                           bottom: 2,
                           child: IconButton(
                             icon: const Icon(Icons.delete),
