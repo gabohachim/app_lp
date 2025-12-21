@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../db/vinyl_db.dart';
+import '../services/backup_service.dart';
 import '../services/discography_service.dart';
 import '../services/metadata_service.dart';
 import '../services/vinyl_add_service.dart';
-import '../services/backup_service.dart';
 import '../services/view_mode_service.dart';
 import 'discography_screen.dart';
 import 'settings_screen.dart';
@@ -23,104 +23,39 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // ⭐ Cache local para favoritos (cambio instantáneo)
-  final Map<int, bool> _favCache = {};
-  int _reloadTick = 0;
-
   Vista vista = Vista.inicio;
 
+  // visual
   bool _gridView = false;
 
+  // buscar
   final artistaCtrl = TextEditingController();
   final albumCtrl = TextEditingController();
   final yearCtrl = TextEditingController();
 
+  // autocompletado artistas
   Timer? _debounceArtist;
   bool buscandoArtistas = false;
   List<ArtistHit> sugerenciasArtistas = [];
   ArtistHit? artistaElegido;
 
+  // autocompletado álbumes
   Timer? _debounceAlbum;
   bool buscandoAlbums = false;
-  List<AlbumSuggest> sugerenciasAlbums = [];
-  AlbumSuggest? albumElegido;
+  List<Map<String, dynamic>> sugerenciasAlbums = [];
+  Map<String, dynamic>? albumElegido;
 
+  // resultados
   List<Map<String, dynamic>> resultados = [];
   bool mostrarAgregar = false;
 
-  bool autocompletando = false;
+  // agregar
   PreparedVinylAdd? prepared;
+  bool autocompletando = false;
 
-  // ----------------- LIMPIEZA BUSCADOR -----------------
-  void _cancelarBusqueda() {
-    FocusScope.of(context).unfocus();
-    _debounceArtist?.cancel();
-    _debounceAlbum?.cancel();
-
-    setState(() {
-      artistaCtrl.clear();
-      albumCtrl.clear();
-      yearCtrl.clear();
-
-      buscandoArtistas = false;
-      buscandoAlbums = false;
-      sugerenciasArtistas = [];
-      sugerenciasAlbums = [];
-
-      artistaElegido = null;
-      albumElegido = null;
-
-      resultados = [];
-      prepared = null;
-      mostrarAgregar = false;
-      autocompletando = false;
-    });
-  }
-
-  void _limpiarArtista() {
-    FocusScope.of(context).unfocus();
-    _debounceArtist?.cancel();
-    _debounceAlbum?.cancel();
-
-    setState(() {
-      artistaCtrl.clear();
-      albumCtrl.clear();
-      yearCtrl.clear();
-
-      buscandoArtistas = false;
-      buscandoAlbums = false;
-      sugerenciasArtistas = [];
-      sugerenciasAlbums = [];
-
-      artistaElegido = null;
-      albumElegido = null;
-
-      resultados = [];
-      prepared = null;
-      mostrarAgregar = false;
-      autocompletando = false;
-    });
-  }
-
-  void _limpiarAlbum() {
-    FocusScope.of(context).unfocus();
-    _debounceAlbum?.cancel();
-
-    setState(() {
-      albumCtrl.clear();
-      yearCtrl.clear();
-
-      buscandoAlbums = false;
-      sugerenciasAlbums = [];
-
-      albumElegido = null;
-
-      resultados = [];
-      prepared = null;
-      mostrarAgregar = false;
-      autocompletando = false;
-    });
-  }
+  // cache local para favorito instantáneo (lista/grid)
+  final Map<int, bool> _favCache = {};
+  int _reloadTick = 0;
 
   @override
   void initState() {
@@ -156,15 +91,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return dbFav;
   }
 
-
   Future<void> _toggleFavorite(Map<String, dynamic> v) async {
     final id = v['id'];
     if (id is! int) return;
 
-    final current = _isFav(v);
+    final current = (v['favorite'] ?? 0) == 1;
     final next = !current;
 
-    // ✅ Optimista: cambia al tiro
+    // ✅ UI inmediata
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
@@ -251,101 +185,24 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _gridVinylCard(Map<String, dynamic> v, {required bool conBorrar}) {
-    final year = (v['year'] as String?)?.trim() ?? '';
-    final artista = (v['artista'] as String?)?.trim() ?? '';
-    final album = (v['album'] as String?)?.trim() ?? '';
-    final fav = _isFav(v);
-
-    return InkWell(
-      onTap: () => _openDetail(v),
-      borderRadius: BorderRadius.circular(14),
-      child: Card(
-        color: Colors.white.withOpacity(0.88),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: _gridCover(v),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    artista,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  Text(
-                    album,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(year.isEmpty ? '—' : year),
-                ],
-              ),
-            ),
-
-            // 🔢 número arriba derecha
-            Positioned(
-              right: 8,
-              top: 8,
-              child: _numeroBadge(v['numero']),
-            ),
-
-            // ⭐ Favoritos abajo derecha (lista grid + favoritos grid)
-            if (!conBorrar)
-              Positioned(
-                right: 2,
-                bottom: 2,
-                child: IconButton(
-                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                  icon: Icon(fav ? Icons.star : Icons.star_border),
-                  onPressed: () => _toggleFavorite(v),
-                ),
-              ),
-
-            // 🗑️ borrar (lo dejamos arriba derecha)
-            if (conBorrar)
-              Positioned(
-                left: 2,
-                bottom: 2,
-                child: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () async {
-                    await VinylDb.instance.deleteById(v['id'] as int);
-                    await BackupService.autoSaveIfEnabled();
-                    snack('Borrado');
-                    setState(() {});
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---- autocomplete artista ----
+  // ---------------- BUSCADOR (autocompletado artista) ----------------
   void _onArtistChanged(String v) {
     _debounceArtist?.cancel();
     final q = v.trim();
 
     setState(() {
       artistaElegido = null;
+
+      // reset album al cambiar artista
+      albumCtrl.clear();
       albumElegido = null;
       sugerenciasAlbums = [];
       buscandoAlbums = false;
+
       prepared = null;
       mostrarAgregar = false;
       resultados = [];
+      yearCtrl.clear();
     });
 
     if (q.isEmpty) {
@@ -374,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
       artistaCtrl.text = a.name;
       sugerenciasArtistas = [];
 
-      // Cuando eliges artista: reinicia álbum
+      // reset album
       albumCtrl.clear();
       albumElegido = null;
       sugerenciasAlbums = [];
@@ -383,9 +240,11 @@ class _HomeScreenState extends State<HomeScreen> {
       prepared = null;
       mostrarAgregar = false;
       resultados = [];
+      yearCtrl.clear();
     });
   }
 
+  // ---------------- BUSCADOR (autocompletado album) ----------------
   void _onAlbumChanged(String v) {
     _debounceAlbum?.cancel();
     final q = v.trim();
@@ -396,9 +255,10 @@ class _HomeScreenState extends State<HomeScreen> {
       prepared = null;
       mostrarAgregar = false;
       resultados = [];
+      yearCtrl.clear();
     });
 
-    if (artistName.isEmpty || q.isEmpty) {
+    if (q.isEmpty || artistName.isEmpty) {
       setState(() {
         sugerenciasAlbums = [];
         buscandoAlbums = false;
@@ -406,12 +266,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    _debounceAlbum = Timer(const Duration(milliseconds: 220), () async {
+    _debounceAlbum = Timer(const Duration(milliseconds: 250), () async {
       setState(() => buscandoAlbums = true);
-      final hits = await MetadataService.searchAlbumsForArtist(
-        artistName: artistName,
-        albumQuery: q,
-      );
+      final hits = await MetadataService.searchAlbumsForArtist(artistName, q);
       if (!mounted) return;
       setState(() {
         sugerenciasAlbums = hits;
@@ -420,18 +277,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _pickAlbum(AlbumSuggest a) async {
+  Future<void> _pickAlbum(Map<String, dynamic> al) async {
     FocusScope.of(context).unfocus();
     setState(() {
-      albumElegido = a;
-      albumCtrl.text = a.title;
+      albumElegido = al;
+      albumCtrl.text = (al['title'] ?? '').toString();
       sugerenciasAlbums = [];
       prepared = null;
       mostrarAgregar = false;
       resultados = [];
+      yearCtrl.clear();
     });
   }
 
+  // ---------------- BUSCAR EN DB ----------------
   Future<void> buscar() async {
     final artista = artistaCtrl.text.trim();
     final album = albumCtrl.text.trim();
@@ -454,125 +313,75 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (mostrarAgregar) {
       setState(() => autocompletando = true);
+      try {
+        final p = await VinylAddService.prepare(
+          artist: artista,
+          album: album,
+          artistId: artistaElegido?.id,
+        );
 
-      final p = await VinylAddService.prepare(
-        artist: artista,
-        album: album,
-        artistId: artistaElegido?.id,
-      );
+        if (!mounted) return;
 
-      if (!mounted) return;
-
-      setState(() {
-        prepared = p;
-        yearCtrl.text = p.year ?? '';
-        autocompletando = false;
-      });
+        setState(() {
+          prepared = p;
+          yearCtrl.text = (p.year ?? '').trim();
+          autocompletando = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => autocompletando = false);
+      }
     }
-
-    // dejamos el texto (para que veas lo que buscaste) y solo ocultamos sugerencias
-    setState(() {
-      sugerenciasArtistas = [];
-      sugerenciasAlbums = [];
-      buscandoArtistas = false;
-      buscandoAlbums = false;
-    });
   }
 
   Future<void> agregar() async {
     final p = prepared;
     if (p == null) return;
 
-    final res = await VinylAddService.addPrepared(
-      p,
-      overrideYear: yearCtrl.text.trim().isEmpty ? null : yearCtrl.text.trim(),
-    );
-
-    snack(res.message);
-    if (!res.ok) return;
+    final overrideYear = yearCtrl.text.trim().isEmpty ? null : yearCtrl.text.trim();
+    final res = await VinylAddService.addPrepared(p, overrideYear: overrideYear);
 
     await BackupService.autoSaveIfEnabled();
+    snack(res.message);
 
-    setState(() {
-      prepared = null;
-      mostrarAgregar = false;
-      resultados = [];
-      yearCtrl.clear();
-    });
+    if (res.ok) {
+      setState(() {
+        prepared = null;
+        mostrarAgregar = false;
+        resultados = [];
+        yearCtrl.clear();
+        _reloadTick++;
+      });
+    }
   }
 
-  Widget contadorLp() {
-    return FutureBuilder<int>(
-      future: VinylDb.instance.getCount(),
-      builder: (context, snap) {
-        final total = snap.data ?? 0;
-        return Container(
-          width: 90,
-          height: 70,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.65),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '$total',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget nubeEstado() {
-    return FutureBuilder<bool>(
-      future: BackupService.isAutoEnabled(),
-      builder: (context, snap) {
-        final auto = snap.data ?? false;
-        return Container(
-          width: 90,
-          height: 70,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.65),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(
-            auto ? Icons.cloud_done : Icons.cloud_off,
-            color: auto ? Colors.greenAccent : Colors.white54,
-            size: 30,
-          ),
-        );
-      },
-    );
-  }
-
+  // ---------------- UI: encabezado/home ----------------
   Widget encabezadoInicio() {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        contadorLp(),
-        const Spacer(),
-        nubeEstado(),
+      children: const [
+        Text(
+          'GaboLP',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text('Colección de vinilos', style: TextStyle(color: Colors.white)),
       ],
     );
   }
 
   Widget gabolpMarca() {
-    return const Positioned(
-      right: 10,
-      bottom: 8,
-      child: IgnorePointer(
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
         child: Text(
-          'GaBoLP',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white70,
-            fontWeight: FontWeight.w700,
-          ),
+          'GaboLP',
+          style: TextStyle(color: Colors.white.withOpacity(0.75)),
         ),
       ),
     );
@@ -611,20 +420,20 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         btn(Icons.search, 'Buscar vinilos', () => setState(() => vista = Vista.buscar)),
         const SizedBox(height: 10),
+
         btn(Icons.library_music, 'Discografías', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const DiscographyScreen()));
         }),
         const SizedBox(height: 10),
 
-        // ✅ sin "Mostrar"
         btn(Icons.list, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
         const SizedBox(height: 10),
 
         btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
         const SizedBox(height: 10),
 
-        // ✅ NUEVO: Lista de deseos (debajo de favoritos)
-        btn(Icons.bookmark_border, 'Lista de deseos', () {
+        // ✅ NUEVO: Lista de deseos (debajo de favoritos) -> ICONO CARRITO
+        btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
             setState(() {});
@@ -646,6 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ---------------- UI: vista buscar ----------------
   Widget vistaBuscar() {
     final p = prepared;
     final showXArtist = artistaCtrl.text.trim().isNotEmpty;
@@ -662,12 +472,10 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.black12),
         ),
-        child: ListView.separated(
+        child: ListView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (context, i) => tile(items[i]),
+          children: items.map(tile).toList(),
         ),
       );
     }
@@ -675,135 +483,181 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ✅ SOLO: Artista, Álbum y botón Buscar
-        TextField(
-          controller: artistaCtrl,
-          onChanged: _onArtistChanged,
-          decoration: InputDecoration(
-            labelText: 'Artista',
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.85),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            suffixIcon: showXArtist
-                ? IconButton(
-                    tooltip: 'Limpiar',
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: _limpiarArtista,
-                  )
-                : null,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: artistaCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Artista',
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.85),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  suffixIcon: showXArtist
+                      ? IconButton(
+                          tooltip: 'Limpiar artista',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            FocusScope.of(context).unfocus();
+                            _debounceArtist?.cancel();
+                            _debounceAlbum?.cancel();
+                            setState(() {
+                              artistaCtrl.clear();
+                              albumCtrl.clear();
+                              yearCtrl.clear();
+                              buscandoArtistas = false;
+                              buscandoAlbums = false;
+                              sugerenciasArtistas = [];
+                              sugerenciasAlbums = [];
+                              artistaElegido = null;
+                              albumElegido = null;
+                              resultados = [];
+                              prepared = null;
+                              mostrarAgregar = false;
+                              autocompletando = false;
+                            });
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: _onArtistChanged,
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              tooltip: 'Limpiar todo',
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () {
+                FocusScope.of(context).unfocus();
+                _debounceArtist?.cancel();
+                _debounceAlbum?.cancel();
+                setState(() {
+                  artistaCtrl.clear();
+                  albumCtrl.clear();
+                  yearCtrl.clear();
+                  buscandoArtistas = false;
+                  buscandoAlbums = false;
+                  sugerenciasArtistas = [];
+                  sugerenciasAlbums = [];
+                  artistaElegido = null;
+                  albumElegido = null;
+                  resultados = [];
+                  prepared = null;
+                  mostrarAgregar = false;
+                  autocompletando = false;
+                });
+              },
+            ),
+          ],
         ),
-        if (buscandoArtistas)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: LinearProgressIndicator(),
-          ),
+        if (buscandoArtistas) const LinearProgressIndicator(),
         if (sugerenciasArtistas.isNotEmpty)
           suggestionBox<ArtistHit>(
             items: sugerenciasArtistas,
             tile: (a) {
               final c = (a.country ?? '').trim();
               return ListTile(
-                dense: true,
-                title: Text(a.name),
+                title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: c.isEmpty ? null : Text('País: $c'),
                 onTap: () => _pickArtist(a),
               );
             },
           ),
-
         const SizedBox(height: 10),
-
-        TextField(
-          controller: albumCtrl,
-          onChanged: _onAlbumChanged,
-          decoration: InputDecoration(
-            labelText: 'Álbum',
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.85),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            suffixIcon: showXAlbum
-                ? IconButton(
-                    tooltip: 'Limpiar',
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: _limpiarAlbum,
-                  )
-                : null,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: albumCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Álbum',
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.85),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  suffixIcon: showXAlbum
+                      ? IconButton(
+                          tooltip: 'Limpiar álbum',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            FocusScope.of(context).unfocus();
+                            _debounceAlbum?.cancel();
+                            setState(() {
+                              albumCtrl.clear();
+                              yearCtrl.clear();
+                              buscandoAlbums = false;
+                              sugerenciasAlbums = [];
+                              albumElegido = null;
+                              resultados = [];
+                              prepared = null;
+                              mostrarAgregar = false;
+                              autocompletando = false;
+                            });
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: _onAlbumChanged,
+              ),
+            ),
+          ],
         ),
-        if (buscandoAlbums)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: LinearProgressIndicator(),
-          ),
+        if (buscandoAlbums) const LinearProgressIndicator(),
         if (sugerenciasAlbums.isNotEmpty)
-          suggestionBox<AlbumSuggest>(
+          suggestionBox<Map<String, dynamic>>(
             items: sugerenciasAlbums,
             tile: (al) {
-              final y = (al.year ?? '').trim();
+              final t = (al['title'] ?? '').toString();
+              final y = (al['year'] ?? '').toString().trim();
               return ListTile(
-                dense: true,
-                title: Text(al.title),
-                subtitle: y.isEmpty ? null : Text('Año: $y'),
+                title: Text(t, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('Año: ${y.isEmpty ? '—' : y}'),
                 onTap: () => _pickAlbum(al),
               );
             },
           ),
-
         const SizedBox(height: 10),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: buscar,
-          child: const Text('Buscar'),
+          icon: const Icon(Icons.search),
+          label: const Text('Buscar'),
         ),
+        const SizedBox(height: 10),
 
-        const SizedBox(height: 8),
-        OutlinedButton(
-          onPressed: _cancelarBusqueda,
-          child: const Text('Limpiar'),
-        ),
-
-        // ✅ Si lo tienes en la colección
         if (resultados.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Ya lo tienes en tu colección:',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 8),
-                ...resultados.map((v) {
-                  final y = (v['year'] as String?)?.trim() ?? '';
-                  final yTxt = y.isEmpty ? '' : ' ($y)';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        _leadingCover(v),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '${v['numero']} — ${v['artista']} — ${v['album']}$yTxt',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
+          const Text('Resultados:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ...resultados.map((v) {
+            final fav = _isFav(v);
+            final year = (v['year'] as String?)?.trim();
+            final genre = (v['genre'] as String?)?.trim();
+            final country = (v['country'] as String?)?.trim();
+            return Card(
+              color: Colors.white.withOpacity(0.88),
+              child: ListTile(
+                leading: _leadingCover(v),
+                title: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 28),
+                      child: Text('${v['artista']} — ${v['album']}'),
                     ),
-                  );
-                }).toList(),
-              ],
-            ),
-          ),
+                    Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
+                  ],
+                ),
+                subtitle: Text(
+                  'Año: ${(year?.isEmpty ?? true) ? '—' : year}  •  Género: ${(genre?.isEmpty ?? true) ? '—' : genre}  •  País: ${(country?.isEmpty ?? true) ? '—' : country}',
+                ),
+                onTap: () => _openDetail(v),
+                trailing: IconButton(
+                  tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                  icon: Icon(fav ? Icons.star : Icons.star_border),
+                  onPressed: () => _toggleFavorite(v),
+                ),
+              ),
+            );
+          }).toList(),
         ],
 
-        // ✅ Si NO está y se puede agregar, mostramos automático año/género/país/caratula + botón
         if (mostrarAgregar) ...[
           const SizedBox(height: 12),
           Container(
@@ -863,7 +717,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // año editable (opcional)
                   TextField(
                     controller: yearCtrl,
                     keyboardType: TextInputType.number,
@@ -888,18 +741,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ---------------- UI: lista completa / favoritos / borrar ----------------
   Widget listaCompleta({required bool conBorrar, required bool onlyFavorites}) {
     final fut = VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey('listaCompleta_' + onlyFavorites.toString() + '_' + conBorrar.toString() + '_' + _reloadTick.toString()),
+      key: ValueKey('listaCompleta_${onlyFavorites}_${conBorrar}_${_reloadTick.toString()}'),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
         final rawItems = snap.data!;
-        final items = onlyFavorites
-            ? rawItems.where((v) => _isFav(v)).toList()
-            : rawItems;
+        final items = onlyFavorites ? rawItems.where((v) => _isFav(v)).toList() : rawItems;
+
         if (items.isEmpty) {
           return Text(
             onlyFavorites ? 'No tienes favoritos todavía.' : 'No tienes vinilos todavía.',
@@ -919,7 +772,82 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisSpacing: 10,
               childAspectRatio: 0.78,
             ),
-            itemBuilder: (context, i) => _gridVinylCard(items[i], conBorrar: conBorrar),
+            itemBuilder: (context, i) {
+              final v = items[i];
+              final year = (v['year'] as String?)?.trim() ?? '';
+              final artista = (v['artista'] as String?)?.trim() ?? '';
+              final album = (v['album'] as String?)?.trim() ?? '';
+              final fav = _isFav(v);
+
+              return InkWell(
+                onTap: () => _openDetail(v),
+                borderRadius: BorderRadius.circular(14),
+                child: Card(
+                  color: Colors.white.withOpacity(0.88),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _gridCover(v),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              artista,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            Text(
+                              album,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(year.isEmpty ? '—' : year),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: _numeroBadge(v['numero']),
+                      ),
+                      if (!conBorrar)
+                        Positioned(
+                          right: 2,
+                          bottom: 2,
+                          child: IconButton(
+                            tooltip: fav ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                            icon: Icon(fav ? Icons.star : Icons.star_border),
+                            onPressed: () => _toggleFavorite(v),
+                          ),
+                        ),
+                      if (conBorrar)
+                        Positioned(
+                          left: 2,
+                          bottom: 2,
+                          child: IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () async {
+                              await VinylDb.instance.deleteById(v['id'] as int);
+                              await BackupService.autoSaveIfEnabled();
+                              snack('Borrado');
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         }
 
@@ -938,8 +866,6 @@ class _HomeScreenState extends State<HomeScreen> {
               color: Colors.white.withOpacity(0.88),
               child: ListTile(
                 leading: _leadingCover(v),
-
-                // número como badge + texto artista/album (sin "LP")
                 title: Stack(
                   children: [
                     Padding(
@@ -953,12 +879,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(right: 0, top: 0, child: _numeroBadge(v['numero'])),
                   ],
                 ),
-
                 subtitle: Text(
                   'Año: $year  •  Género: ${genre?.isEmpty ?? true ? '—' : genre}  •  País: ${country?.isEmpty ?? true ? '—' : country}',
                 ),
                 onTap: () => _openDetail(v),
-
                 trailing: conBorrar
                     ? IconButton(
                         icon: const Icon(Icons.delete),
@@ -1000,7 +924,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title = 'Borrar vinilos';
         break;
       default:
-        title = 'GaBoLP';
+        title = 'GaboLP';
     }
 
     return AppBar(
