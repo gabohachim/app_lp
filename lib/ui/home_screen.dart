@@ -25,11 +25,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // ⭐ Cache local para favoritos (cambio instantáneo)
   final Map<int, bool> _favCache = {};
-  int _reloadTick = 0;
 
   Vista vista = Vista.inicio;
 
   bool _gridView = false;
+
+  // ✅ Contadores para badges en los botones del inicio
+  Future<Map<String, int>>? _homeCountsFuture;
+  Map<String, int> _homeCounts = const {'all': 0, 'fav': 0, 'wish': 0};
 
   final artistaCtrl = TextEditingController();
   final albumCtrl = TextEditingController();
@@ -126,6 +129,31 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadViewMode();
+    _refreshHomeCounts();
+  }
+
+  Future<void> _refreshHomeCounts() async {
+    // Cargamos 3 contadores (vinilos, favoritos, wishlist) para mostrar badges en el inicio.
+    final fut = Future.wait([
+      VinylDb.instance.getAll(),
+      VinylDb.instance.getFavorites(),
+      VinylDb.instance.getWishlist(),
+    ]).then((r) {
+      final all = (r[0] as List).length;
+      final fav = (r[1] as List).length;
+      final wish = (r[2] as List).length;
+      return {'all': all, 'fav': fav, 'wish': wish};
+    });
+
+    setState(() => _homeCountsFuture = fut);
+
+    try {
+      final counts = await fut;
+      if (!mounted) return;
+      setState(() => _homeCounts = counts);
+    } catch (_) {
+      // si falla, dejamos los contadores anteriores
+    }
   }
 
   Future<void> _loadViewMode() async {
@@ -168,7 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _favCache[id] = next;
       v['favorite'] = next ? 1 : 0;
-      _reloadTick++;
     });
 
     try {
@@ -180,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _favCache[id] = current;
         v['favorite'] = current ? 1 : 0;
-        _reloadTick++;
       });
       snack('Error actualizando favorito.');
     }
@@ -312,10 +338,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // 🗑️ borrar (lo dejamos arriba derecha)
+            // 🗑️ borrar abajo derecha (bien a la esquina)
             if (conBorrar)
               Positioned(
-                left: 2,
+                right: 2,
                 bottom: 2,
                 child: IconButton(
                   icon: const Icon(Icons.delete),
@@ -449,7 +475,11 @@ class _HomeScreenState extends State<HomeScreen> {
       yearCtrl.clear();
     });
 
-    snack(res.isEmpty ? 'No lo tienes' : 'Ya lo tienes');
+    if (res.isEmpty) {
+      snack('No lo tienes');
+    } else {
+      snack('Discos encontrados: ${res.length}');
+    }
 
     if (mostrarAgregar) {
       setState(() => autocompletando = true);
@@ -550,14 +580,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget encabezadoInicio() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        contadorLp(),
-        const Spacer(),
-        nubeEstado(),
-      ],
-    );
+    // ✅ Pedido: quitar contador total y nube de activación del inicio
+    return const SizedBox.shrink();
   }
 
   Widget gabolpMarca() {
@@ -578,32 +602,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget botonesInicio() {
-    Widget btn(IconData icon, String text, VoidCallback onTap) {
+    Widget btn(IconData icon, String text, VoidCallback onTap, {int? badge}) {
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              Icon(icon),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  text,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  Icon(icon),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+            ),
+            if (badge != null)
+              Positioned(
+                right: 10,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$badge',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
+          ],
         ),
       );
     }
+
+    // ✅ Si aún no cargó el Future, usamos los últimos contadores.
+    final all = _homeCounts['all'] ?? 0;
+    final fav = _homeCounts['fav'] ?? 0;
+    final wish = _homeCounts['wish'] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -617,19 +670,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // ✅ sin "Mostrar"
         // ✅ Icono de "líneas" (mismo estilo para lista/agregar)
-        btn(Icons.format_list_bulleted, 'Lista de vinilos', () => setState(() => vista = Vista.lista)),
+        btn(
+          Icons.format_list_bulleted,
+          'Lista de vinilos',
+          () {
+            setState(() => vista = Vista.lista);
+          },
+          badge: all,
+        ),
         const SizedBox(height: 10),
 
-        btn(Icons.star, 'Vinilos favoritos', () => setState(() => vista = Vista.favoritos)),
+        btn(
+          Icons.star,
+          'Vinilos favoritos',
+          () {
+            setState(() => vista = Vista.favoritos);
+          },
+          badge: fav,
+        ),
         const SizedBox(height: 10),
 
         // ✅ Lista de deseos con icono carrito (mismo que discografía)
         btn(Icons.shopping_cart, 'Lista de deseos', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => WishlistScreen())).then((_) {
             if (!mounted) return;
+            _refreshHomeCounts();
             setState(() {});
           });
-        }),
+        }, badge: wish),
         const SizedBox(height: 10),
 
         btn(Icons.settings, 'Ajustes', () {
@@ -892,7 +960,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final fut = VinylDb.instance.getAll();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey('listaCompleta_' + onlyFavorites.toString() + '_' + conBorrar.toString() + '_' + _reloadTick.toString()),
       future: fut,
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());

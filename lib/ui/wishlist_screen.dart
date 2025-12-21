@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../db/vinyl_db.dart';
 import '../services/backup_service.dart';
+import '../services/discography_service.dart';
+import 'album_tracks_screen.dart';
+import 'vinyl_detail_sheet.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -86,6 +89,61 @@ class _WishlistScreenState extends State<WishlistScreen> {
     return _placeholder();
   }
 
+  Future<void> _openDetail(Map<String, dynamic> w) async {
+    final artistName = (w['artista'] ?? '').toString().trim();
+    final albumTitle = (w['album'] ?? '').toString().trim();
+    final year = (w['year'] ?? '').toString().trim();
+    final cover250 = (w['cover250'] ?? '').toString().trim();
+    final cover500 = (w['cover500'] ?? '').toString().trim();
+    final artistId = (w['artistId'] ?? '').toString().trim();
+
+    // ✅ Si tenemos artistId, intentamos abrir igual que Discografías (con canciones)
+    if (artistId.isNotEmpty && artistName.isNotEmpty && albumTitle.isNotEmpty) {
+      try {
+        final discog = await DiscographyService.getDiscographyByArtistId(artistId);
+        AlbumItem? match;
+        for (final a in discog) {
+          if (a.title.trim().toLowerCase() == albumTitle.toLowerCase()) {
+            match = a;
+            break;
+          }
+        }
+        if (match != null && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AlbumTracksScreen(album: match!, artistName: artistName),
+            ),
+          );
+          return;
+        }
+      } catch (_) {
+        // fallback abajo
+      }
+    }
+
+    // Fallback: mostramos detalle básico (sin tracks)
+    final cover = cover500.isNotEmpty ? cover500 : cover250;
+    final vinylLike = <String, dynamic>{
+      'mbid': '',
+      'coverPath': cover,
+      'artista': artistName,
+      'album': albumTitle,
+      'year': year,
+      'genre': '',
+      'country': '',
+      'artistBio': '',
+    };
+
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => VinylDetailSheet(vinyl: vinylLike),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +182,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               final year = (w['year'] ?? '').toString().trim();
 
               return ListTile(
+                onTap: () => _openDetail(w),
                 leading: _leadingCover(w),
                 title: Text(
                   album.isEmpty ? '—' : album,

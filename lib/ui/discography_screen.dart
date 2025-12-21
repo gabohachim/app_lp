@@ -184,11 +184,13 @@ class _DiscographyScreenState extends State<DiscographyScreen> {
     // ✅ Regla: para ser favorito, el álbum debe estar agregado a tu lista
     if (!exists) return;
 
-    final id = _vinylId[key];
+    // ✅ A veces el id aún no está hidratado (primera vez que tocas ⭐).
+    //    En vez de obligarte a tocar 2 veces, lo hidratamos y seguimos.
+    var id = _vinylId[key];
     if (id == null) {
-      // si no tenemos id aún, hidratamos y luego reintenta
       await _hydrateIfNeeded(artistName, al);
-      return;
+      id = _vinylId[key];
+      if (id == null) return;
     }
 
     // ✅ Optimista: cambia UI al tiro
